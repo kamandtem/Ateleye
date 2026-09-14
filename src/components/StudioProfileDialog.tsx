@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Building2, Phone, FileText, X, Check, Image } from 'lucide-react';
-import { StudioProfile } from '../types/pose';
+import { Building2, Phone, FileText, X, Check, Image, ChevronDown, Camera, Sparkles } from 'lucide-react';
+import { StudioProfile, CameraType, ServiceType } from '../types/pose';
+import { formatMoney, parseMoney } from '../services/money';
+
+const SERVICES: ServiceType[] = ['عکاسی مراسم', 'میکس', 'آلبوم', 'عکس سر مجلسی', 'پخش کلیپ', 'TV اسلاید'];
+const CAMERAS: CameraType[] = ['دستی', 'کرین', 'لرزشگیر', 'عکاسی', 'هلی‌شات', 'FPV'];
 
 interface Props {
   open: boolean;
@@ -17,6 +21,9 @@ export const StudioProfileDialog: React.FC<Props> = ({ open, profile, onCancel, 
   const [logo, setLogo] = useState<string | null>(null);
   const [bankName, setBankName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
+  const [pricesOpen, setPricesOpen] = useState(false);
+  const [servicePrices, setServicePrices] = useState<Partial<Record<ServiceType, number>>>({});
+  const [cameraPrices, setCameraPrices] = useState<Partial<Record<CameraType, number>>>({});
 
   useEffect(() => {
     if (open && profile) {
@@ -27,8 +34,10 @@ export const StudioProfileDialog: React.FC<Props> = ({ open, profile, onCancel, 
       setLogo(profile.logo || null);
       setBankName(profile.bankName || '');
       setAccountNumber(profile.accountNumber || '');
+      setServicePrices(profile.servicePrices || {});
+      setCameraPrices(profile.cameraPrices || {});
     } else if (open) {
-      setName(''); setPhone(''); setCraftCode(''); setAddress(''); setLogo(null); setBankName(''); setAccountNumber('');
+      setName(''); setPhone(''); setCraftCode(''); setAddress(''); setLogo(null); setBankName(''); setAccountNumber(''); setServicePrices({}); setCameraPrices({});
     }
   }, [open, profile]);
 
@@ -54,6 +63,8 @@ export const StudioProfileDialog: React.FC<Props> = ({ open, profile, onCancel, 
       logo: logo || undefined,
       bankName: bankName.trim() || undefined,
       accountNumber: accountNumber.trim() || undefined,
+      servicePrices,
+      cameraPrices,
       createdAt: profile?.createdAt || now,
       updatedAt: now,
     });
@@ -102,6 +113,17 @@ export const StudioProfileDialog: React.FC<Props> = ({ open, profile, onCancel, 
             <span className="label">شماره حساب (اختیاری)</span>
             <input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} placeholder="شماره حساب" className="field" dir="ltr" />
           </div>
+          <section className="rounded-2xl border border-line overflow-hidden">
+            <button type="button" onClick={() => setPricesOpen(v => !v)} className="w-full min-h-14 px-4 flex items-center gap-3 text-right bg-surface2">
+              <span className="w-9 h-9 rounded-xl grid place-items-center bg-[var(--color-olive)] text-paper"><Sparkles className="w-4 h-4" /></span>
+              <span className="flex-1"><b className="block text-[13px]">قیمت پایه خدمات و دوربین</b><small className="text-[10px] text-muted">یک بار وارد کن، فاکتور پروژه‌ها خودکار پر می‌شود</small></span>
+              <ChevronDown className={`w-4 h-4 transition-transform ${pricesOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {pricesOpen && <div className="p-3 space-y-4 bg-surface">
+              <PriceGroup icon={Sparkles} title="خدمات" values={SERVICES} prices={servicePrices} onChange={(key, value) => setServicePrices(v => ({ ...v, [key]: value }))} />
+              <PriceGroup icon={Camera} title="دوربین و تجهیزات" values={CAMERAS} prices={cameraPrices} onChange={(key, value) => setCameraPrices(v => ({ ...v, [key]: value }))} />
+            </div>}
+          </section>
         </div>
         <div className="sticky bottom-0 flex items-center gap-2 px-4 py-3 border-t border-line bg-surface/90 backdrop-blur-md">
           <button onClick={onCancel} className="btn btn-ghost flex-1">انصراف</button>
@@ -111,3 +133,14 @@ export const StudioProfileDialog: React.FC<Props> = ({ open, profile, onCancel, 
     </div>
   );
 };
+
+
+const PriceGroup = <T extends string>({ icon: Icon, title, values, prices, onChange }: { icon: React.ElementType; title: string; values: T[]; prices: Partial<Record<T, number>>; onChange: (key: T, value: number) => void }) => (
+  <div className="space-y-2">
+    <h3 className="flex items-center gap-2 text-[12px] font-black"><Icon className="w-4 h-4 text-gold" />{title}</h3>
+    {values.map(value => <label key={value} className="grid grid-cols-[1fr_9rem] items-center gap-2">
+      <span className="text-[11px] font-bold">{value}</span>
+      <span className="relative"><input inputMode="numeric" value={prices[value] ? formatMoney(prices[value] || 0) : ''} onChange={e => onChange(value, parseMoney(e.target.value))} className="field pl-12 text-left tabular-nums" dir="ltr" placeholder="۰" /><small className="absolute left-3 top-1/2 -translate-y-1/2 text-muted">تومن</small></span>
+    </label>)}
+  </div>
+);

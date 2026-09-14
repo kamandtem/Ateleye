@@ -4,6 +4,7 @@ import { Pose } from '../types/pose';
 import { PoseVisual } from '../components/PoseVisual';
 import { EmptyState } from '../components/EmptyState';
 import { SectionGuide } from '../components/SectionGuide';
+import { scenarioOf, scopeLabel } from '../data/taxonomy';
 
 interface Props {
   poses: Pose[];
@@ -73,13 +74,11 @@ export const MyPosesView: React.FC<Props> = ({
                 </button>
 
                 <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                  <span className="pill !text-[10px] pill-on">{scenarioOf(p)}</span>
+                  <span className="pill !text-[10px]">{scopeLabel(p)}</span>
                   <span className="pill !text-[10px]">{p.category}</span>
-                  <span className="pill !text-[10px]">{p.poseType}</span>
-                  {p.locations.map((l) => (
-                    <span key={l} className="pill !text-[10px]">
-                      {l}
-                    </span>
-                  ))}
+                  {p.mood && <span className="pill !text-[10px]">{p.mood}</span>}
+                  {p.framing && <span className="pill !text-[10px]">{p.framing}</span>}
                 </div>
 
                 <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-line">

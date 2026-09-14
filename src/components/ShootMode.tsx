@@ -15,6 +15,7 @@ import { PoseVisual } from './PoseVisual';
 import { ScriptPanel } from './ScriptPanel';
 import { PoseChecklist } from './PoseChecklist';
 import { FilmPlan } from './FilmPlan';
+import { scenarioOf, scopeLabel } from '../data/taxonomy';
 
 interface Props {
   open: boolean;
@@ -28,6 +29,8 @@ interface Props {
    *  (چون ژست بعدی از یک صف از پیش مرتب‌شده می‌آید، نه انتخاب تصادفی)،
    *  پس به‌جایش موقعیت داخل صف نشان داده می‌شود. */
   queuePosition?: { index: number; total: number };
+  /** بعد از ثبت اطلاعات فیلم‌برداری این ژست، برای بازخوانی داده‌ها */
+  onDataChanged?: () => void;
 }
 
 /** حالت عکاسی: همه چیزِ لازم سر صحنه، در یک صفحه و با فونت درشت */
@@ -40,6 +43,7 @@ export const ShootMode: React.FC<Props> = ({
   onToggleFavorite,
   bigScript,
   queuePosition,
+  onDataChanged,
 }) => {
   const [seconds, setSeconds] = useState(0);
   const [poseSeconds, setPoseSeconds] = useState(0);
@@ -91,7 +95,7 @@ export const ShootMode: React.FC<Props> = ({
                 />
                 <span className="text-[12px] font-extrabold text-gold">حالت عکاسی فعال</span>
               </div>
-              <p className="text-[10px] text-faint">{pose.category} · {pose.locations.join(' · ')}</p>
+              <p className="text-[10px] text-faint">{scenarioOf(pose)} · {scopeLabel(pose)}</p>
             </div>
           </div>
 
@@ -222,7 +226,7 @@ export const ShootMode: React.FC<Props> = ({
           </button>
         </div>
       </div>
-      <FilmPlan pose={pose} open={filmOpen} onClose={() => setFilmOpen(false)} />
+      <FilmPlan pose={pose} open={filmOpen} onClose={() => setFilmOpen(false)} onSaved={onDataChanged} />
     </div>
   );
 };

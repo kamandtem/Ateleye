@@ -45,6 +45,46 @@ export const GARDEN_SUB_CATEGORIES: GardenSubCategory[] = [
   'شب و بدرقه',
 ];
 
+/* ==========================================================================
+ * تاکسونومی نسل دوم: محور اصلی «سناریوی تصویربرداری» است، نه لوکیشن.
+ * ========================================================================== */
+
+/**
+ * دسته اصلی هر ژست = مرحله واقعی روز تصویربرداری.
+ * این تنها «Category» حقیقی محصول است؛ بقیه چیزها Attribute هستند.
+ */
+export type ScenarioCategory =
+  | 'دیتیل صحنه'
+  | 'اکسسوری'
+  | 'آماده شدن عروس'
+  | 'آماده شدن داماد'
+  | 'نگاه اول و بهم رسیدن'
+  | 'پرتره عروس'
+  | 'پرتره داماد'
+  | 'پرتره زوج'
+  | 'تعامل زوج'
+  | 'قدم زدن و حرکت'
+  | 'شادی، احساس و رقص'
+  | 'خانواده و گروهی'
+  | 'مراسم و ورود'
+  | 'شب و بدرقه';
+
+/** زیرموضوع سناریوهای «دیتیل صحنه» و «اکسسوری» */
+export type DetailSubject = 'دکور' | 'حلقه' | 'دسته‌گل' | 'لباس' | 'کفش' | 'اکسسوری';
+
+/**
+ * عمومی = مستقل از لوکیشن، در اکثر محیط‌ها قابل اجرا (هسته کتابخانه).
+ * اختصاصی لوکیشن = بدون ویژگی فیزیکی/بصری آن محیط بی‌معنا می‌شود.
+ */
+export type PoseScope = 'عمومی' | 'اختصاصی لوکیشن';
+
+export type Framing = 'کلوز' | 'مدیوم' | 'واید';
+export type Mood = 'رمانتیک' | 'شاد' | 'آرام' | 'دراماتیک' | 'رسمی';
+export type EnvironmentType = 'فضای باز' | 'فضای بسته' | 'هر دو';
+
+/** حالت فیلتر حرکت در UI */
+export type MovementFilter = 'همه' | 'دارد' | 'ندارد';
+
 /**
  * نوع تصویرسازی ژست (طرح گرافیکی داخلی و آفلاین).
  * هر کلید یک «صحنه» مشخص است که دقیقاً همان چیزی را نشان می‌دهد که در
@@ -161,6 +201,12 @@ export const COMFORT_STAGES: ComfortStage[] = [
   'حرفه‌ای',
 ];
 
+export interface PhotoCrop {
+  x: number;
+  y: number;
+  zoom: number;
+}
+
 export interface Pose {
   id: string;
   title: string;
@@ -174,12 +220,43 @@ export interface Pose {
 
   /** تصویر مرجعی که خود کاربر اضافه کرده (dataURL). اختیاری. */
   image?: string;
+  /** نسبت تصویر ژست هنگام افزودن: افقی ۴:۳ یا عمودی ۳:۴. پیش‌فرض ۴:۳. */
+  imageRatio?: '4/3' | '3/4';
 
-  /** فقط وقتی یکی از لوکیشن‌ها «باغ عمارت» باشد معنا دارد؛ مرحله‌ی اجرا سر صحنه. */
+  /**
+   * @deprecated معماری قدیمی، لوکیشن‌محور. فقط برای مهاجرت داده نگه داشته شده
+   * است؛ مقدار جدید در `scenario` محاسبه می‌شود.
+   */
   gardenSubCategory?: GardenSubCategory;
+
+  /* ---------------- metadata تاکسونومی جدید (روی همان ID یکتا) ---------------- */
+
+  /** دسته اصلی: مرحله سناریوی تصویربرداری */
+  scenario?: ScenarioCategory;
+  /** فقط برای سناریوهای «دیتیل صحنه» و «اکسسوری» */
+  detailSubject?: DetailSubject;
+  /** عمومی یا وابسته به یک لوکیشن خاص */
+  scope?: PoseScope;
+  /** وقتی scope = اختصاصی لوکیشن، این‌جا مشخص می‌شود به کدام محیط قفل است */
+  locationLock?: LocationType;
+  /** توضیح انسانی وابستگی، برای نمایش در صفحه ژست */
+  locationReason?: string;
+  /** همه محیط‌هایی که این ژست در آن‌ها قابل اجراست (بدون Duplicate رکورد) */
+  suitableLocations?: LocationType[];
+  framing?: Framing;
+  mood?: Mood;
+  /** آیا سوژه در این ژست حرکت می‌کند */
+  movement?: boolean;
+  environment?: EnvironmentType;
 
   /** true اگر تصویر مرجع یک گیف/تصویر متحرک باشد (نه عکس ثابت فشرده‌شده). */
   isAnimated?: boolean;
+
+  /**
+   * برای عکس‌های متحرک (گیف/وبق) که برش‌شان روی canvas ممکن نیست: موقعیت و
+   * زوم انتخابی کاربر، تا در نمایش (بدون برش واقعی فایل) همان قاب اعمال شود.
+   */
+  photoCrop?: PhotoCrop;
 
   steps: string[];
   bodyPosition: string;
@@ -204,7 +281,39 @@ export interface Pose {
   createdAt?: number;
   note?: string;
   suggestedMinutes?: number;
+
+  /* -------------- فیلم‌برداری این ژست (صفحه «فیلم‌برداری این ژست») -------------- */
+  /** نوع ساختاریافته حرکت دوربین هنگام فیلم‌برداری */
+  cameraMovementType?: CameraMovementType;
+  /** متن قدیمی/توضیح تکمیلی حرکت دوربین برای سازگاری */
+  cameraMovement?: string;
+  /** حرکت سوژه هنگام فیلم‌برداری این ژست */
+  subjectMovement?: string;
+  /** ابزار حرکتی دوربین برای فیلم‌برداری این ژست */
+  movementTool?: MovementTool;
+  /** توضیح اکت و حرکت دقیق سوژه */
+  actionDescription?: string;
 }
+
+export type CameraMovementType = 'pan' | 'tilt' | 'arc' | 'dolly' | 'track' | 'static';
+
+export const CAMERA_MOVEMENT_OPTIONS: { key: CameraMovementType; label: string; icon: string }[] = [
+  { key: 'pan', label: 'پن', icon: '↔' },
+  { key: 'tilt', label: 'تیلت', icon: '↕' },
+  { key: 'arc', label: 'آرک', icon: '◌' },
+  { key: 'dolly', label: 'دالی', icon: '⇥' },
+  { key: 'track', label: 'ترک', icon: '⇄' },
+  { key: 'static', label: 'نمای ثابت', icon: '▣' },
+];
+
+/** ابزار حرکتی دوربین برای فیلم‌برداری یک ژست */
+export type MovementTool = 'gimbal' | 'handheld' | 'heli';
+
+export const MOVEMENT_TOOL_OPTIONS: { key: MovementTool; label: string }[] = [
+  { key: 'gimbal', label: 'گیمبال' },
+  { key: 'handheld', label: 'دوربین روی دست' },
+  { key: 'heli', label: 'هلی‌شات' },
+];
 
 export interface MyLocation {
   id: string;
@@ -220,25 +329,51 @@ export interface MyLocation {
 
 export interface FilterState {
   search: string;
+
+  /** فیلتر اصلی و پیش‌فرض کتابخانه: مرحله سناریو */
+  scenario: ScenarioCategory | 'همه';
+  detailSubject: DetailSubject | 'همه';
+
+  /** عمومی / اختصاصی لوکیشن */
+  scope: PoseScope | 'همه';
+
+  /**
+   * از این پس معنای این فیلتر «قابل اجرا در این لوکیشن» است، نه «متعلق به
+   * این لوکیشن». یک ژست عمومی در همه Contextهای سازگار ظاهر می‌شود.
+   */
+  location: LocationType | 'همه';
+
+  framing: Framing | 'همه';
+  mood: Mood | 'همه';
+  movement: MovementFilter;
+  environment: EnvironmentType | 'همه';
+
   category: CategoryType | 'همه';
   poseType: PoseType | 'همه';
   difficulty: DifficultyLevel | 'همه';
-  location: LocationType | 'همه';
-  /** فقط وقتی location === 'باغ عمارت' باشد در UI نشان داده می‌شود. */
-  gardenSubCategory: GardenSubCategory | 'همه';
   peopleCount: number | null;
   customOnly: boolean;
+
+  /** @deprecated جای آن را scenario گرفته است. */
+  gardenSubCategory: GardenSubCategory | 'همه';
 }
 
 export const EMPTY_FILTERS: FilterState = {
   search: '',
+  scenario: 'همه',
+  detailSubject: 'همه',
+  scope: 'همه',
+  location: 'همه',
+  framing: 'همه',
+  mood: 'همه',
+  movement: 'همه',
+  environment: 'همه',
   category: 'همه',
   poseType: 'همه',
   difficulty: 'همه',
-  location: 'همه',
-  gardenSubCategory: 'همه',
   peopleCount: null,
   customOnly: false,
+  gardenSubCategory: 'همه',
 };
 
 
@@ -253,39 +388,14 @@ export interface StudioProfile {
   logo?: string;          /** dataURL of logo */
   bankName?: string;
   accountNumber?: string;
+  servicePrices?: Partial<Record<ServiceType, number>>;
+  cameraPrices?: Partial<Record<CameraType, number>>;
   createdAt: number;
   updatedAt: number;
 }
 
-export type CameraType =
-  | 'دوربین فیلم‌برداری'
-  | 'دوربین عکاسی'
-  | 'رونین'
-  | 'هلی‌شات'
-  | 'FPV'
-  | 'کرین'
-  | 'نور و صدابرداری'
-  | 'دستی'
-  | 'عکاسی'
-  | 'لرزشگیر';
-export type ServiceType =
-  | 'فیلم‌برداری و تدوین'
-  | 'عکاسی باغ'
-  | 'عکاسی مراسم'
-  | 'فرمالیته شهری'
-  | 'فرمالیته اطراف شهر'
-  | 'فرمالیته شمال یا جنوب'
-  | 'عقد محضری'
-  | 'آلبوم'
-  | 'چاپ عکس'
-  | 'پخش کلیپ در مراسم'
-  | 'اسلایدشو و ادیت عکس'
-  | 'تحویل آرشیو عکس'
-  | 'ورودی آتلیه'
-  | 'ورودی باغ و عمارت'
-  | 'میکس'
-  | 'عکس سر مجلسی'
-  | 'TV اسلاید';
+export type CameraType = 'هلی‌شات' | 'FPV' | 'کرین' | 'دستی' | 'عکاسی' | 'لرزشگیر';
+export type ServiceType = 'عکاسی مراسم' | 'میکس' | 'آلبوم' | 'عکس سر مجلسی' | 'پخش کلیپ' | 'TV اسلاید';
 export type LocationTypeFormatted = 'محلی' | 'شمال' | 'جنوب' | 'باغ عمارت';
 export type ThemeType = 'شاد و اکتیو' | 'ارامش' | 'عاشقانه احساسی';
 
@@ -295,6 +405,7 @@ export interface Ceremony {
   location?: string;
   cameras: Partial<Record<CameraType, number>>; /** camera -> count */
   services: Partial<Record<ServiceType, { checked: boolean; notes?: string }>>;
+  customServices?: Array<{ id: string; name: string; checked: boolean }>;
   createdAt: number;
   updatedAt: number;
 }
@@ -314,34 +425,27 @@ export interface ProjectInvoice {
   id: string;
   items: Array<{ name: string; count: number; price: number }>;  /** price per unit in تومان */
   deposit?: number;
-  discount?: number;
-  notes?: string;
-  status?: 'draft' | 'final';
   customerName?: string;
   total: number;
   createdAt: number;
   updatedAt: number;
 }
 
-export interface OfficeCustomer {
-  brideName?: string;
-  brideNationalId?: string;
-  bridePhone?: string;
-  groomName?: string;
-  groomNationalId?: string;
-  groomPhone?: string;
-  address?: string;
-}
-
 export interface OfficeProject {
   id: string;
   name: string;           /** نام پروژه */
-  customer?: OfficeCustomer;
-  eventType?: 'عقد' | 'عروسی' | 'عقد و عروسی' | 'فرمالیته';
+  groomName?: string;
+  brideName?: string;
+  groomNationalId?: string;
+  brideNationalId?: string;
+  clientPhone?: string;
+  secondaryPhone?: string;
+  customerAddress?: string;
+  contractDate?: string;
   startTime?: string;
   endTime?: string;
-  overtimeRate?: number;
-  paymentPlan?: 'نقد' | 'سه ماهه' | 'پنج ماهه';
+  extraHourPrice?: number;
+  ceremonyType?: 'عقد' | 'عروسی' | 'عقد و عروسی';
   contractNotes?: string;
   ceremony?: Ceremony;    /** اختیاری */
   formality?: Formality;  /** اختیاری */

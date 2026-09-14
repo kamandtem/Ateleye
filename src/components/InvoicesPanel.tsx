@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Edit2, Save, X } from 'lucide-react';
+import { formatMoney, parseMoney } from '../services/money';
 
 interface Invoice {
   id: string;
@@ -12,8 +13,8 @@ interface Invoice {
   updatedAt: number;
 }
 
-const money = (n: number) => n.toLocaleString('fa-IR');
-const cleanNumber = (str: string) => parseInt(str.replace(/[^\d]/g, '')) || 0;
+const money = formatMoney;
+const cleanNumber = parseMoney;
 
 export const InvoicesPanel: React.FC = () => {
   const [invoices, setInvoices] = useState<Invoice[]>(() => {
@@ -154,7 +155,7 @@ export const InvoicesPanel: React.FC = () => {
         {/* Total */}
         <div className="pt-3 border-t border-line flex justify-between">
           <span className="font-bold text-[12px]">جمع کل</span>
-          <span className="font-extrabold text-gold text-[13px]">{money(total)} تومان</span>
+          <span className="font-extrabold text-gold text-[13px]">{money(total)} تومن</span>
         </div>
 
         <button onClick={saveInvoice} className="btn btn-primary w-full">
@@ -180,7 +181,7 @@ export const InvoicesPanel: React.FC = () => {
                   </button>
                 </div>
               </div>
-              <div className="text-right text-[12px] font-bold text-gold">{money(inv.total)} تومان</div>
+              <div className="text-right text-[12px] font-bold text-gold">{money(inv.total)} تومن</div>
             </div>
           ))
         )}

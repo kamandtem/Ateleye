@@ -49,7 +49,7 @@ export const SettingsView: React.FC<Props> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `pose-director-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `atelito-backup-${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -64,13 +64,13 @@ export const SettingsView: React.FC<Props> = ({
     try {
       const result = await buildPosePackZip();
       if (!result) {
-        onToast('هنوز ژست شخصی برای انتقال نداری.', false);
+        onToast('هنوز چیزی برای انتقال نداری (نه ژست شخصی، نه عکس یا ژست تغییرکرده، نه ژست حذف‌شده‌ای).', false);
         return;
       }
       const url = URL.createObjectURL(result.blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `pose-director-pose-pack-${new Date().toISOString().slice(0, 10)}.zip`;
+      a.download = `atelito-pose-pack-${new Date().toISOString().slice(0, 10)}.zip`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -156,7 +156,7 @@ export const SettingsView: React.FC<Props> = ({
           {packing ? 'در حال آماده‌سازی...' : 'آماده‌سازی بسته ژست برای انتقال'}
         </button>
         <p className="text-[10.5px] leading-relaxed text-muted">
-          این گزینه یک فایل zip می‌سازد که هم عکس‌های ژست‌های شخصی‌ات (هرکدام با نام خودش) و هم اطلاعات متنی آن‌ها را کنار هم دارد.
+          این گزینه یک فایل zip می‌سازد که عکس‌های ژست‌های شخصی‌ات و اطلاعات متنی آن‌ها، و همچنین عکس هر ژست آماده‌ای که خودت عوضش کرده‌ای، را کنار هم دارد.
           همین یک فایل را برای سازنده برنامه بفرست.
         </p>
         <input

@@ -1,17 +1,24 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, Camera, Trash2, Plus, Save, ImagePlus, Loader2, ZoomIn, ZoomOut, Check, Move, RotateCcw } from 'lucide-react';
+import { X, Camera, Trash2, Plus, Save, ImagePlus, Loader2, ZoomIn, ZoomOut, Check, Move, RotateCcw, RectangleVertical, RectangleHorizontal } from 'lucide-react';
 import {
   ArtKey,
   CategoryType,
   DifficultyLevel,
-  GARDEN_SUB_CATEGORIES,
-  GardenSubCategory,
+  Framing,
   LocationType,
+  Mood,
+  MovementTool,
+  MOVEMENT_TOOL_OPTIONS,
+  CameraMovementType,
+  CAMERA_MOVEMENT_OPTIONS,
+  PoseScope,
+  ScenarioCategory,
   Pose,
   PoseType,
 } from '../types/pose';
 import { LOCATION_KEYS } from '../data/locations';
-import { getCustomPoses, nextTransferCode, saveCustomPose } from '../services/storage';
+import { FRAMINGS, MOODS, SCENARIO_KEYS, SCOPES, enrichPose } from '../data/taxonomy';
+import { getCustomPoses, nextTransferCode, saveCustomPose, savePoseEdit } from '../services/storage';
 import { artForText, progressionMeta } from '../data/poses';
 import { MAX_ANIMATED_KB, approxDataUrlKb, isAnimatedFile } from '../services/media';
 import { PoseVisual } from './PoseVisual';
@@ -154,6 +161,7 @@ export const AddPoseSheet: React.FC<Props> = ({ open, onClose, onSaved, editing 
 
   const [busy, setBusy] = useState(false);
   const [image, setImage] = useState<string | undefined>();
+  const [imageRatio, setImageRatio] = useState<'4/3' | '3/4'>('4/3');
   const [isAnimatedImage, setIsAnimatedImage] = useState(false);
   const [cropSource, setCropSource] = useState<string | undefined>();
   const [title, setTitle] = useState('');
@@ -162,7 +170,12 @@ export const AddPoseSheet: React.FC<Props> = ({ open, onClose, onSaved, editing 
   const [difficulty, setDifficulty] = useState<DifficultyLevel>('آسان');
   const [peopleCount, setPeopleCount] = useState(2);
   const [locations, setLocations] = useState<LocationType[]>(['باغ عمارت']);
-  const [gardenSubCategory, setGardenSubCategory] = useState<GardenSubCategory | undefined>(undefined);
+  // تاکسونومی جدید: مرحله سناریو دسته اصلی است، بقیه Attribute هستند.
+  const [scenario, setScenario] = useState<ScenarioCategory>('پرتره زوج');
+  const [scope, setScope] = useState<PoseScope>('عمومی');
+  const [mood, setMood] = useState<Mood>('رمانتیک');
+  const [framing, setFraming] = useState<Framing>('مدیوم');
+  const [movement, setMovement] = useState(false);
   const [steps, setSteps] = useState<string[]>(blankLines);
   const [script, setScript] = useState<string[]>(blankLines);
   const [variations, setVariations] = useState<string[]>(['']);
@@ -170,11 +183,26 @@ export const AddPoseSheet: React.FC<Props> = ({ open, onClose, onSaved, editing 
   const [tagText, setTagText] = useState('');
   const [note, setNote] = useState('');
   const [lens, setLens] = useState('');
+  const [bodyPosition, setBodyPosition] = useState('');
+  const [handPosition, setHandPosition] = useState('');
+  const [footPosition, setFootPosition] = useState('');
+  const [headDirection, setHeadDirection] = useState('');
+  const [eyeDirection, setEyeDirection] = useState('');
+  const [camFraming, setCamFraming] = useState('');
+  const [camAngle, setCamAngle] = useState('');
+  const [camDistance, setCamDistance] = useState('');
+  const [lightTip, setLightTip] = useState('');
+  const [cameraMovementType, setCameraMovementType] = useState<CameraMovementType | undefined>();
+  const [cameraMovement, setCameraMovement] = useState('');
+  const [subjectMovement, setSubjectMovement] = useState('');
+  const [actionDescription, setActionDescription] = useState('');
+  const [movementTool, setMovementTool] = useState<MovementTool | undefined>();
 
   useEffect(() => {
     if (!open) return;
     if (editing) {
       setImage(editing.image);
+      setImageRatio(editing.imageRatio || '4/3');
       setIsAnimatedImage(!!editing.isAnimated);
       setTitle(editing.title);
       setCategory(editing.category);
@@ -182,7 +210,11 @@ export const AddPoseSheet: React.FC<Props> = ({ open, onClose, onSaved, editing 
       setDifficulty(editing.difficulty);
       setPeopleCount(editing.peopleCount);
       setLocations(editing.locations.length ? editing.locations : ['باغ عمارت']);
-      setGardenSubCategory(editing.gardenSubCategory);
+      setScenario(editing.scenario || 'پرتره زوج');
+      setScope(editing.scope || 'عمومی');
+      setMood(editing.mood || 'رمانتیک');
+      setFraming(editing.framing || 'مدیوم');
+      setMovement(!!editing.movement);
       setSteps(editing.steps.length ? editing.steps : blankLines);
       setScript(editing.photographerScript.length ? editing.photographerScript : blankLines);
       setVariations(editing.variations.length ? editing.variations : ['']);
@@ -190,8 +222,23 @@ export const AddPoseSheet: React.FC<Props> = ({ open, onClose, onSaved, editing 
       setTagText(editing.tags.filter((t) => t !== editing.poseType).join('، '));
       setNote(editing.note || '');
       setLens(editing.cameraTips.lensSuggestion || '');
+      setBodyPosition(editing.bodyPosition || '');
+      setHandPosition(editing.handPosition || '');
+      setFootPosition(editing.footPosition || '');
+      setHeadDirection(editing.headDirection || '');
+      setEyeDirection(editing.eyeDirection || '');
+      setCamFraming(editing.cameraTips.framing || '');
+      setCamAngle(editing.cameraTips.cameraAngle || '');
+      setCamDistance(editing.cameraTips.suggestedDistance || '');
+      setLightTip(editing.cameraTips.lightTip || '');
+      setCameraMovementType(editing.cameraMovementType);
+      setCameraMovement(editing.cameraMovement || '');
+      setSubjectMovement(editing.subjectMovement || '');
+      setActionDescription(editing.actionDescription || '');
+      setMovementTool(editing.movementTool);
     } else {
       setImage(undefined);
+      setImageRatio('4/3');
       setIsAnimatedImage(false);
       setTitle('');
       setCategory('عروس و داماد');
@@ -199,7 +246,11 @@ export const AddPoseSheet: React.FC<Props> = ({ open, onClose, onSaved, editing 
       setDifficulty('آسان');
       setPeopleCount(2);
       setLocations(['باغ عمارت']);
-      setGardenSubCategory(undefined);
+      setScenario('پرتره زوج');
+      setScope('عمومی');
+      setMood('رمانتیک');
+      setFraming('مدیوم');
+      setMovement(false);
       setSteps(blankLines);
       setScript(blankLines);
       setVariations(['']);
@@ -207,6 +258,20 @@ export const AddPoseSheet: React.FC<Props> = ({ open, onClose, onSaved, editing 
       setTagText('');
       setNote('');
       setLens('');
+      setBodyPosition('');
+      setHandPosition('');
+      setFootPosition('');
+      setHeadDirection('');
+      setEyeDirection('');
+      setCamFraming('');
+      setCamAngle('');
+      setCamDistance('');
+      setLightTip('');
+      setCameraMovementType(undefined);
+      setCameraMovement('');
+      setSubjectMovement('');
+      setActionDescription('');
+      setMovementTool(undefined);
     }
   }, [open, editing]);
 
@@ -279,43 +344,69 @@ export const AddPoseSheet: React.FC<Props> = ({ open, onClose, onSaved, editing 
       ART_BY_TYPE[poseType]
     );
 
+    // ویرایش یک ژست «از قبل موجود» (آماده/وارداتی/ترفیع‌گرفته) با ژست شخصی
+    // تازه فرق دارد: باید همان id و کد انتقال حفظ شود و به‌جای ساخته‌شدن یک
+    // ژست جدید، به‌صورت Overlay (savePoseEdit) ذخیره شود؛ وگرنه هم نسخه اصلی و
+    // هم نسخه ویرایش‌شده با هم در فهرست ظاهر می‌شوند.
+    const isEditingExisting = !!editing && !editing.isCustom;
+
     const pose: Pose = {
       id: editing?.id || `mine-${Date.now()}`,
-      transferCode: editing?.transferCode || nextTransferCode(getCustomPoses()),
+      transferCode: isEditingExisting ? editing?.transferCode : (editing?.transferCode || nextTransferCode(getCustomPoses())),
       title: title.trim(),
       category,
       poseType,
       difficulty,
       peopleCount,
       locations: locations.length ? locations : ['باغ عمارت'],
-      gardenSubCategory: locations.includes('باغ عمارت') ? gardenSubCategory : undefined,
+      scenario,
+      scope,
+      /**
+       * ژست عمومی به هیچ محیطی قفل نمی‌شود و در همه Contextهای سازگار دیده
+       * می‌شود؛ ژست اختصاصی فقط به اولین لوکیشن انتخابی وابسته است.
+       */
+      locationLock: scope === 'اختصاصی لوکیشن' ? (locations[0] || 'باغ عمارت') : undefined,
+      suitableLocations: scope === 'اختصاصی لوکیشن' ? [locations[0] || 'باغ عمارت'] : undefined,
+      mood,
+      framing,
+      movement,
       art,
       ...progressionMeta(difficulty, art, peopleCount),
       image,
+      imageRatio,
       isAnimated: isAnimatedImage || undefined,
-      tags: Array.from(new Set([...tags, poseType, ...locations, 'ژست من'])),
+      tags: Array.from(
+        new Set([...tags, poseType, ...locations, ...(isEditingExisting ? [] : ['ژست من'])])
+      ),
       steps: cleanSteps,
-      bodyPosition: note.trim() || 'فرم بدن را طبق مراحل اجرا تنظیم کنید.',
-      handPosition: 'انگشتان کشیده و آزاد، بدون انقباض.',
-      footPosition: 'وزن روی پای عقب، پای جلو کمی سبک.',
-      headDirection: 'چانه کمی جلو تا خط فک تمیز دیده شود.',
-      eyeDirection: 'نگاه در ثانیه آخر روی نقطه هدف بنشیند.',
+      bodyPosition: bodyPosition.trim() || 'فرم بدن را طبق مراحل اجرا تنظیم کنید.',
+      handPosition: handPosition.trim() || 'انگشتان کشیده و آزاد، بدون انقباض.',
+      footPosition: footPosition.trim() || 'وزن روی پای عقب، پای جلو کمی سبک.',
+      headDirection: headDirection.trim() || 'چانه کمی جلو تا خط فک تمیز دیده شود.',
+      eyeDirection: eyeDirection.trim() || 'نگاه در ثانیه آخر روی نقطه هدف بنشیند.',
       photographerScript: cleanScript.length ? cleanScript : ['آرام در همین حالت بمانید.'],
       commonMistakes: mistakes.map((m) => m.trim()).filter(Boolean),
       variations: cleanVariations,
       cameraTips: {
-        framing: 'مدیوم شات',
-        cameraAngle: 'هم‌سطح چشم سوژه',
-        suggestedDistance: '۲ تا ۳ متر',
+        framing: camFraming.trim() || 'مدیوم شات',
+        cameraAngle: camAngle.trim() || 'هم‌سطح چشم سوژه',
+        suggestedDistance: camDistance.trim() || '۲ تا ۳ متر',
         lensSuggestion: lens.trim() || '85mm f/1.8',
-        lightTip: 'نور اصلی با زاویه ۴۵ درجه از یک سمت.',
+        lightTip: lightTip.trim() || 'نور اصلی با زاویه ۴۵ درجه از یک سمت.',
       },
-      isCustom: true,
+      isCustom: !isEditingExisting,
       createdAt: editing?.createdAt || Date.now(),
       note: note.trim() || undefined,
+      cameraMovementType,
+      cameraMovement: cameraMovement.trim() || undefined,
+      subjectMovement: subjectMovement.trim() || undefined,
+      actionDescription: actionDescription.trim() || undefined,
+      movementTool,
     };
 
-    const res = saveCustomPose(pose);
+    // metadata خالی‌مانده (مثل فضا و لوکیشن‌های سازگار) محاسبه می‌شود.
+    const enriched = enrichPose(pose);
+    const res = isEditingExisting ? savePoseEdit(enriched) : saveCustomPose(enriched);
     if (res.ok) {
       onSaved(editing ? 'ژست به‌روزرسانی شد.' : 'ژست شما ذخیره شد و در جستجو پیدا می‌شود.', true);
       onClose();
@@ -334,10 +425,16 @@ export const AddPoseSheet: React.FC<Props> = ({ open, onClose, onSaved, editing 
     difficulty,
     peopleCount,
     locations: locations.length ? locations : ['باغ عمارت'],
-    gardenSubCategory: locations.includes('باغ عمارت') ? gardenSubCategory : undefined,
+    scenario,
+    scope,
+    locationLock: scope === 'اختصاصی لوکیشن' ? (locations[0] || 'باغ عمارت') : undefined,
+    mood,
+    framing,
+    movement,
     art: previewArt,
     ...progressionMeta(difficulty, previewArt, peopleCount),
     image,
+    imageRatio,
     isAnimated: isAnimatedImage,
     tags: [],
     steps: [],
@@ -349,6 +446,11 @@ export const AddPoseSheet: React.FC<Props> = ({ open, onClose, onSaved, editing 
     photographerScript: [],
     commonMistakes: [],
     variations: [],
+    cameraMovementType,
+    cameraMovement,
+    subjectMovement,
+    actionDescription,
+    movementTool,
     cameraTips: {
       framing: '',
       cameraAngle: '',
@@ -363,9 +465,11 @@ export const AddPoseSheet: React.FC<Props> = ({ open, onClose, onSaved, editing 
       {cropSource && (
         <PhotoCropper
           source={cropSource}
+          initialRatio={imageRatio}
           onCancel={() => setCropSource(undefined)}
-          onConfirm={(cropped) => {
+          onConfirm={(cropped, ratio) => {
             setImage(cropped);
+            setImageRatio(ratio);
             setCropSource(undefined);
             onSaved('عکس تنظیم شد. حالا می‌توانی ذخیره کنی.', true);
           }}
@@ -399,31 +503,47 @@ export const AddPoseSheet: React.FC<Props> = ({ open, onClose, onSaved, editing 
           {/* عکس ژست */}
           <div>
             <span className="label">عکس ژست (از گالری یا دوربین)</span>
-            <div className="relative aspect-[4/3] rounded-2xl overflow-hidden border border-line">
+            <div className="mb-2">
+              <span className="text-[10px] font-extrabold text-faint block mb-1.5">نسبت عکس</span>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setImageRatio('4/3')}
+                  className={`btn ${imageRatio === '4/3' ? 'btn-primary' : 'btn-ghost'} !py-2 !text-[11px]`}
+                >
+                  <RectangleHorizontal className="w-4 h-4" />
+                  افقی ۴:۳
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImageRatio('3/4')}
+                  className={`btn ${imageRatio === '3/4' ? 'btn-primary' : 'btn-ghost'} !py-2 !text-[11px]`}
+                >
+                  <RectangleVertical className="w-4 h-4" />
+                  عمودی ۳:۴
+                </button>
+              </div>
+            </div>
+            <div
+              className={
+                (imageRatio === '3/4' ? 'mx-auto w-[min(70%,260px)] aspect-[3/4]' : 'w-full aspect-[4/3]') +
+                ' relative rounded-2xl overflow-hidden border border-line'
+              }
+            >
               <PoseVisual pose={preview} contain={!!image} />
               {busy && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/50">
                   <Loader2 className="w-6 h-6 animate-spin text-gold" />
                 </div>
               )}
-              <div className="absolute bottom-2.5 right-2.5 left-2.5 flex items-center justify-between gap-2">
+              <div className="absolute bottom-2.5 right-2.5 left-2.5">
                 <button
                   onClick={() => fileRef.current?.click()}
-                  className="btn btn-primary !py-2 !px-3 !text-[11px]"
+                  className="btn btn-primary w-full !py-2 !px-3 !text-[11px]"
                 >
                   {image ? <Camera className="w-3.5 h-3.5" /> : <ImagePlus className="w-3.5 h-3.5" />}
                   {image ? 'تغییر عکس' : 'انتخاب عکس'}
                 </button>
-                {image && (
-                  <button
-                    onClick={() => { setImage(undefined); setIsAnimatedImage(false); }}
-                    className="btn btn-ghost !py-2 !px-3 !text-[11px]"
-                    style={{ background: 'rgba(8,6,14,.6)' }}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    حذف عکس
-                  </button>
-                )}
               </div>
             </div>
             <input
@@ -434,7 +554,7 @@ export const AddPoseSheet: React.FC<Props> = ({ open, onClose, onSaved, editing 
               onChange={pickImage}
             />
             <p className="text-[10px] text-faint mt-1.5 leading-relaxed">
-              اگر عکس انتخاب نکنید، طرح راهنمای خودکار برنامه نمایش داده می‌شود. عکس‌های عادی فشرده
+              عکس انتخابی با نسبت بالا برش می‌خورد، فشرده می‌شود
               و روی همین دستگاه ذخیره می‌شوند{image && !isAnimatedImage ? ` (حدود ${approxDataUrlKb(image)} کیلوبایت)` : ''}.
               گیف بدون فشرده‌سازی و با همان کیفیت اصلی ذخیره می‌شود (حداکثر ۳ مگابایت) تا انیمیشنش حفظ شود.
             </p>
@@ -493,8 +613,30 @@ export const AddPoseSheet: React.FC<Props> = ({ open, onClose, onSaved, editing 
             </div>
           </div>
 
+          {/* دسته اصلی: مرحله سناریو */}
+          <ChipSelect label="مرحله سناریو (دسته اصلی) *" options={SCENARIO_KEYS} value={scenario} onChange={setScenario} />
+
+          {/* عمومی یا اختصاصی */}
           <div>
-            <span className="label">لوکیشن مناسب (چند مورد قابل انتخاب است)</span>
+            <span className="label">این ژست عمومی است یا وابسته به یک محیط؟</span>
+            <p className="text-[10px] text-faint -mt-1 mb-1.5 leading-relaxed">
+              اگر ژست را می‌توان در باغ، جنگل، ساحل، کویر یا شهر هم اجرا کرد، «عمومی» است — حتی اگر
+              عکس نمونه‌اش در یک لوکیشن خاص گرفته شده باشد. «اختصاصی» فقط برای ژستی است که بدون
+              ویژگی فیزیکی آن محیط (قایق، رمل، مه جنگل، ستون عمارت) بی‌معنا می‌شود.
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {SCOPES.map((sc) => (
+                <button key={sc} onClick={() => setScope(sc)} className={`pill ${scope === sc ? 'pill-on' : ''}`}>
+                  {sc}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <span className="label">
+              {scope === 'اختصاصی لوکیشن' ? 'وابسته به کدام محیط؟ (اولین انتخاب)' : 'لوکیشن‌های مناسب (چند مورد)'}
+            </span>
             <div className="flex flex-wrap gap-1.5">
               {LOCATION_KEYS.map((l) => (
                 <button
@@ -506,16 +648,55 @@ export const AddPoseSheet: React.FC<Props> = ({ open, onClose, onSaved, editing 
                 </button>
               ))}
             </div>
+            {scope === 'عمومی' && (
+              <p className="text-[10px] text-faint mt-1.5 leading-relaxed">
+                برای ژست عمومی این انتخاب فقط «تمایل بصری» است؛ ژست در همه محیط‌های سازگار نمایش
+                داده می‌شود و هیچ نسخه تکراری ساخته نمی‌شود.
+              </p>
+            )}
           </div>
 
-          {locations.includes('باغ عمارت') && (
-            <ChipSelect
-              label="زیردسته باغ عمارت (مرحله اجرا سر صحنه)"
-              options={GARDEN_SUB_CATEGORIES}
-              value={gardenSubCategory ?? ('' as GardenSubCategory)}
-              onChange={setGardenSubCategory}
-            />
-          )}
+          <div className="grid grid-cols-2 gap-3">
+            <ChipSelect label="حال‌وهوا" options={MOODS} value={mood} onChange={setMood} />
+            <ChipSelect label="کادر" options={FRAMINGS} value={framing} onChange={setFraming} />
+          </div>
+
+          <button onClick={() => setMovement((v) => !v)} className={`pill ${movement ? 'pill-on' : ''}`}>
+            سوژه در این ژست حرکت می‌کند
+          </button>
+
+          <div className="p-3 rounded-2xl border border-line space-y-3">
+            <span className="label !mb-0">اطلاعات فیلم‌برداری ژست</span>
+            <div>
+              <span className="text-[10px] font-extrabold text-faint block mb-1.5">حرکت دوربین</span>
+              <div className="grid grid-cols-3 gap-1.5">
+                {CAMERA_MOVEMENT_OPTIONS.map((option) => (
+                  <button key={option.key} type="button" onClick={() => setCameraMovementType(cameraMovementType === option.key ? undefined : option.key)} className={`flex flex-col items-center gap-1 py-2 rounded-xl border text-[10px] font-bold ${cameraMovementType === option.key ? 'pill-on' : ''}`}>
+                    <span className="text-base leading-none">{option.icon}</span>{option.label}
+                  </button>
+                ))}
+              </div>
+              <input value={cameraMovement} onChange={(e) => setCameraMovement(e.target.value)} placeholder="توضیح تکمیلی حرکت، مثلاً پن آرام از چپ به راست" className="field mt-2" />
+            </div>
+            <div>
+              <span className="text-[10px] font-extrabold text-faint">حرکت سوژه</span>
+              <textarea value={subjectMovement} rows={2} onChange={(e) => setSubjectMovement(e.target.value)} placeholder="مثلاً: سه قدم آرام و نگاه به دوربین" className="field resize-none" />
+            </div>
+            <div>
+              <span className="text-[10px] font-extrabold text-faint">توضیح اکت و اجرای سوژه</span>
+              <textarea value={actionDescription} rows={3} onChange={(e) => setActionDescription(e.target.value)} placeholder="دقیقاً چه کاری انجام بدهد؟ چه حسی و با چه ریتمی؟" className="field resize-none" />
+            </div>
+            <div>
+              <span className="text-[10px] font-extrabold text-faint block mb-1.5">ابزار حرکتی</span>
+              <div className="flex flex-wrap gap-2">
+                {MOVEMENT_TOOL_OPTIONS.map((option) => (
+                  <button key={option.key} type="button" onClick={() => setMovementTool(movementTool === option.key ? undefined : option.key)} className={`pill ${movementTool === option.key ? 'pill-on' : ''}`}>
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
 
           <ListEditor
             label="مراحل اجرای ژست *"
@@ -565,7 +746,7 @@ export const AddPoseSheet: React.FC<Props> = ({ open, onClose, onSaved, editing 
 
           <div className="grid grid-cols-1 gap-3">
             <div>
-              <span className="label">یادداشت / نکته فرم بدن</span>
+              <span className="label">یادداشت شخصی</span>
               <textarea
                 value={note}
                 rows={2}
@@ -582,11 +763,107 @@ export const AddPoseSheet: React.FC<Props> = ({ open, onClose, onSaved, editing 
                 onChange={setLens as any}
               />
             </div>
+          </div>
+
+          <div
+            className="p-3 rounded-2xl border border-line space-y-3"
+            style={{ background: 'color-mix(in srgb, var(--color-ink) 3%, transparent)' }}
+          >
+            <span className="label !mb-0">فرم بدن و جزئیات (بخش «فرم بدن» صفحه ژست)</span>
             <div>
-              <span className="label">تنظیمات اضافی</span>
-              <input
-                placeholder="f/1.8، ISO، شاتر، ..."
-                className="field"
+              <span className="text-[10px] font-extrabold text-faint">بدن</span>
+              <textarea
+                value={bodyPosition}
+                rows={2}
+                onChange={(e) => setBodyPosition(e.target.value)}
+                placeholder="فرم بدن را طبق مراحل اجرا تنظیم کنید."
+                className="field resize-none"
+              />
+            </div>
+            <div>
+              <span className="text-[10px] font-extrabold text-faint">دست‌ها</span>
+              <textarea
+                value={handPosition}
+                rows={2}
+                onChange={(e) => setHandPosition(e.target.value)}
+                placeholder="انگشتان کشیده و آزاد، بدون انقباض."
+                className="field resize-none"
+              />
+            </div>
+            <div>
+              <span className="text-[10px] font-extrabold text-faint">پاها</span>
+              <textarea
+                value={footPosition}
+                rows={2}
+                onChange={(e) => setFootPosition(e.target.value)}
+                placeholder="وزن روی پای عقب، پای جلو کمی سبک."
+                className="field resize-none"
+              />
+            </div>
+            <div>
+              <span className="text-[10px] font-extrabold text-faint">سر</span>
+              <textarea
+                value={headDirection}
+                rows={2}
+                onChange={(e) => setHeadDirection(e.target.value)}
+                placeholder="چانه کمی جلو تا خط فک تمیز دیده شود."
+                className="field resize-none"
+              />
+            </div>
+            <div>
+              <span className="text-[10px] font-extrabold text-faint">نگاه</span>
+              <textarea
+                value={eyeDirection}
+                rows={2}
+                onChange={(e) => setEyeDirection(e.target.value)}
+                placeholder="نگاه در ثانیه آخر روی نقطه هدف بنشیند."
+                className="field resize-none"
+              />
+            </div>
+          </div>
+
+          <div
+            className="p-3 rounded-2xl border border-line space-y-3"
+            style={{ background: 'color-mix(in srgb, var(--color-ink) 3%, transparent)' }}
+          >
+            <span className="label !mb-0">تنظیمات دوربین</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <span className="text-[10px] font-extrabold text-faint">کادربندی</span>
+                <input
+                  value={camFraming}
+                  onChange={(e) => setCamFraming(e.target.value)}
+                  placeholder="مدیوم شات"
+                  className="field"
+                />
+              </div>
+              <div>
+                <span className="text-[10px] font-extrabold text-faint">زاویه</span>
+                <input
+                  value={camAngle}
+                  onChange={(e) => setCamAngle(e.target.value)}
+                  placeholder="هم‌سطح چشم سوژه"
+                  className="field"
+                />
+              </div>
+              <div>
+                <span className="text-[10px] font-extrabold text-faint">فاصله</span>
+                <input
+                  value={camDistance}
+                  onChange={(e) => setCamDistance(e.target.value)}
+                  placeholder="۲ تا ۳ متر"
+                  className="field"
+                />
+              </div>
+            </div>
+            <div>
+              <span className="text-[10px] font-extrabold text-faint">نور</span>
+              <textarea
+                value={lightTip}
+                rows={2}
+                onChange={(e) => setLightTip(e.target.value)}
+                placeholder="نور اصلی با زاویه ۴۵ درجه از یک سمت."
+                className="field resize-none"
               />
             </div>
           </div>
@@ -608,23 +885,32 @@ export const AddPoseSheet: React.FC<Props> = ({ open, onClose, onSaved, editing 
 };
 
 
+type PhotoRatio = '4/3' | '3/4';
+
 interface PhotoCropperProps {
   source: string;
+  initialRatio: PhotoRatio;
   onCancel: () => void;
-  onConfirm: (dataUrl: string) => void;
+  onConfirm: (dataUrl: string, ratio: PhotoRatio) => void;
   onError?: (message: string) => void;
 }
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
-const OUT_W = 1100;
-const OUT_H = 825;
+const OUT_LONG_SIDE = 1100;
+/** ابعاد خروجی نهایی canvas بر اساس نسبت انتخابی */
+const outSize = (ratio: PhotoRatio) =>
+  ratio === '3/4'
+    ? { w: Math.round((OUT_LONG_SIDE * 3) / 4), h: OUT_LONG_SIDE }
+    : { w: OUT_LONG_SIDE, h: Math.round((OUT_LONG_SIDE * 3) / 4) };
 
 /**
  * ویرایشگر آفلاین عکس با تعامل مستقیم: عکس را با انگشت/ماوس در کادر جابه‌جا کن
  * (درگ) و با دو انگشت یا چرخ ماوس زوم کن؛ بدون اهرم یا اسلایدر جداگانه.
+ * کادر می‌تواند افقی ۴:۳ یا عمودی ۳:۴ باشد؛ انتخاب همین‌جا انجام می‌شود.
  */
-const PhotoCropper: React.FC<PhotoCropperProps> = ({ source, onCancel, onConfirm, onError }) => {
+const PhotoCropper: React.FC<PhotoCropperProps> = ({ source, initialRatio, onCancel, onConfirm, onError }) => {
+  const [ratio, setRatio] = useState<PhotoRatio>(initialRatio);
   const [zoom, setZoom] = useState(1);
   const [pos, setPos] = useState({ x: 0, y: 0 }); // px offset within frame
   const [busy, setBusy] = useState(false);
@@ -683,8 +969,8 @@ const PhotoCropper: React.FC<PhotoCropperProps> = ({ source, onCancel, onConfirm
   const onTouchMove = (e: React.TouchEvent) => {
     if (e.touches.length === 2 && pinchState.current) {
       e.preventDefault();
-      const ratio = dist(e.touches) / pinchState.current.startDist;
-      const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, pinchState.current.startZoom * ratio));
+      const pinchRatio = dist(e.touches) / pinchState.current.startDist;
+      const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, pinchState.current.startZoom * pinchRatio));
       setZoom(next);
     }
   };
@@ -706,10 +992,18 @@ const PhotoCropper: React.FC<PhotoCropperProps> = ({ source, onCancel, onConfirm
 
   const reset = () => { setZoom(1); setPos({ x: 0, y: 0 }); };
 
+  const switchRatio = (next: PhotoRatio) => {
+    if (next === ratio) return;
+    setRatio(next);
+    setZoom(1);
+    setPos({ x: 0, y: 0 });
+  };
+
   const confirm = () => {
     if (!naturalSize) return;
     setBusy(true);
     try {
+      const { w: OUT_W, h: OUT_H } = outSize(ratio);
       const canvas = document.createElement('canvas');
       canvas.width = OUT_W;
       canvas.height = OUT_H;
@@ -727,7 +1021,7 @@ const PhotoCropper: React.FC<PhotoCropperProps> = ({ source, onCancel, onConfirm
           ctx.fillStyle = '#120f1c';
           ctx.fillRect(0, 0, OUT_W, OUT_H);
           ctx.drawImage(img, dx, dy, drawW, drawH);
-          onConfirm(canvas.toDataURL('image/jpeg', 0.82));
+          onConfirm(canvas.toDataURL('image/jpeg', 0.82), ratio);
         } catch {
           onError?.('عکس ذخیره نشد، دوباره تلاش کن.');
         } finally {
@@ -758,9 +1052,39 @@ const PhotoCropper: React.FC<PhotoCropperProps> = ({ source, onCancel, onConfirm
           <button onClick={onCancel} className="p-2 text-muted" aria-label="لغو"><X className="w-5 h-5" /></button>
         </header>
         <div className="p-4 space-y-3.5">
+          <div className="flex items-center gap-2 p-1 rounded-xl" style={{ background: 'var(--color-surface2)' }}>
+            <button
+              type="button"
+              onClick={() => switchRatio('3/4')}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11.5px] font-bold"
+              style={{
+                background: ratio === '3/4' ? 'var(--color-surface)' : 'transparent',
+                color: ratio === '3/4' ? 'var(--color-gold)' : 'var(--color-muted)',
+              }}
+            >
+              <RectangleVertical className="w-3.5 h-3.5" />
+              عمودی ۳:۴
+            </button>
+            <button
+              type="button"
+              onClick={() => switchRatio('4/3')}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11.5px] font-bold"
+              style={{
+                background: ratio === '4/3' ? 'var(--color-surface)' : 'transparent',
+                color: ratio === '4/3' ? 'var(--color-gold)' : 'var(--color-muted)',
+              }}
+            >
+              <RectangleHorizontal className="w-3.5 h-3.5" />
+              افقی ۴:۳
+            </button>
+          </div>
+
           <div
             ref={frameRef}
-            className="relative aspect-[4/3] rounded-2xl overflow-hidden border border-gold bg-[#120f1c] touch-none cursor-move"
+            className={
+              (ratio === '3/4' ? 'aspect-[3/4] max-w-[240px] mx-auto' : 'aspect-[4/3] w-full') +
+              ' relative rounded-2xl overflow-hidden border border-gold bg-[#120f1c] touch-none cursor-move'
+            }
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={endDrag}
@@ -789,7 +1113,9 @@ const PhotoCropper: React.FC<PhotoCropperProps> = ({ source, onCancel, onConfirm
               </div>
             )}
             <div className="absolute inset-0 pointer-events-none" style={{ boxShadow: 'inset 0 0 0 2px color-mix(in srgb, var(--color-gold) 80%, transparent)' }} />
-            <span className="absolute top-2 right-2 pill !text-[9px] pointer-events-none">کادر نهایی ۴:۳</span>
+            <span className="absolute top-2 right-2 pill !text-[9px] pointer-events-none">
+              {ratio === '3/4' ? 'کادر نهایی ۳:۴' : 'کادر نهایی ۴:۳'}
+            </span>
           </div>
 
           <div className="flex items-center justify-center gap-2">

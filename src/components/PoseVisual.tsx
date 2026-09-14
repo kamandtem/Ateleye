@@ -40,6 +40,15 @@ const PoseVisualBase: React.FC<Props> = ({ pose, className = '', contain = false
           decoding="async"
           onError={() => setFailed(true)}
           className={`absolute inset-0 w-full h-full ${contain ? 'object-contain' : 'object-cover'}`}
+          style={
+            !contain && pose.photoCrop
+              ? {
+                  objectPosition: `${pose.photoCrop.x}% ${pose.photoCrop.y}%`,
+                  transform: `scale(${pose.photoCrop.zoom})`,
+                  transformOrigin: 'center center',
+                }
+              : undefined
+          }
         />
       ) : (
         <div

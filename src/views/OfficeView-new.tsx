@@ -139,7 +139,7 @@ export const OfficeView: React.FC<Props> = ({ projects, profile, onAddProject, o
                     {total > 0 && (
                       <div className="pt-4 border-t border-line flex items-center justify-between">
                         <p className="text-[11px] text-muted">کل درآمد</p>
-                        <p className="text-[14px] font-extrabold text-gold">{fa(total)} تومان</p>
+                        <p className="text-[14px] font-extrabold text-gold">{fa(total)} تومن</p>
                       </div>
                     )}
                   </div>

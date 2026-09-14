@@ -1,7 +1,8 @@
 {
-  "name": "کارگردان ژست",
+  "name": "Atelito | آتلیه‌ی تو",
+  "short_name": "Atelito",
   "short_name": "ژست",
-  "description": "دستیار حرفه‌ای هدایت ژست برای عکاسان",
+  "description": "دستیار حرفه‌ای عکاسی و مدیریت آتلیه",
   "lang": "fa",
   "dir": "rtl",
   "start_url": "./",

@@ -1,5 +1,6 @@
-import { FilterState, MyLocation, Pose, StudioProfile, OfficeProject } from '../types/pose';
+import { FilterState, MyLocation, Pose, PhotoCrop, StudioProfile, OfficeProject } from '../types/pose';
 import { INITIAL_POSES } from '../data/poses';
+import { enrichPose, runsIn, scenarioOf, scopeOf } from '../data/taxonomy';
 import { extensionForDataUrl, isAnimatedDataUrl } from './media';
 
 const K = {
@@ -7,12 +8,15 @@ fav: 'pd_favorites_v2',
 recent: 'pd_recent_v2',
 custom: 'pd_custom_poses_v2',
 photos: 'pd_user_photos_v2',
+photoRatios: 'pd_photo_ratios_v1',
+photoCrops: 'pd_photo_crops_v1',
 notes: 'pd_notes_v2',
 prefs: 'pd_prefs_v2',
-seen: 'pd_onboarded_v2',
+seen: 'atelito_onboarded_v2',
 session: 'pd_session_v2',
 promoted: 'pd_promoted_poses_v1',
 deletedBuiltin: 'pd_deleted_builtin_v1',
+poseEdits: 'pd_pose_edits_v1',
 projects: 'pd_projects_v1',
 filmNotes: 'pd_film_notes_v1',
 myLocations: 'pd_my_locations_v1',
@@ -47,10 +51,17 @@ keepAwakeHint: boolean;
 }
 
 export const DEFAULT_PREFS: Prefs = {
-theme: 'dark',
+theme: 'light',
 bigScript: true,
 keepAwakeHint: true,
 };
+
+export interface ShootProjectGalleryItem {
+id: string;
+name: string;
+dataUrl: string;
+addedAt: number;
+}
 
 export interface ShootProject {
 id: string;
@@ -58,8 +69,9 @@ name: string;
 date: string;
 poseIds: string[];
 completedPoseIds?: string[];
+galleryItems?: ShootProjectGalleryItem[];
+completedGalleryIds?: string[];
 createdAt: number;
-mode?: 'عکاسی' | 'فیلم‌برداری';
 }
 
 export type FilmNote = {
@@ -74,12 +86,13 @@ sequence: string[];
 };
 
 export function getProjects(): ShootProject[] {
-return read<ShootProject[]>(K.projects, []);
+const value = read<unknown>(K.projects, []);
+return Array.isArray(value) ? value.filter((item): item is ShootProject => !!item && typeof item === 'object' && typeof (item as ShootProject).id === 'string') : [];
 }
 
-export function saveProject(project: ShootProject): void {
+export function saveProject(project: ShootProject): boolean {
 const all = getProjects().filter((p) => p.id !== project.id);
-write(K.projects, [project, ...all]);
+return write(K.projects, [project, ...all]);
 }
 
 export function deleteProject(id: string): void {
@@ -215,10 +228,43 @@ all[poseId] = dataUrl;
 return write(K.photos, all);
 }
 
+export function getPhotoRatios(): Record<string, '4/3' | '3/4'> {
+return read<Record<string, '4/3' | '3/4'>>(K.photoRatios, {});
+}
+
+export function setPhotoRatio(poseId: string, ratio: '4/3' | '3/4'): boolean {
+const all = getPhotoRatios();
+all[poseId] = ratio;
+return write(K.photoRatios, all);
+}
+
 export function removeUserPhoto(poseId: string): void {
 const all = getUserPhotos();
 delete all[poseId];
 write(K.photos, all);
+const ratios = getPhotoRatios();
+delete ratios[poseId];
+write(K.photoRatios, ratios);
+}
+
+/**
+ * موقعیت/زوم انتخابی برای عکس‌های متحرک (گیف/وبق) که روی canvas برش
+ * نمی‌خورند؛ فقط برای نمایش («بدون برش واقعی فایل») استفاده می‌شود.
+ */
+export function getPhotoCrops(): Record<string, PhotoCrop> {
+return read<Record<string, PhotoCrop>>(K.photoCrops, {});
+}
+
+export function setPhotoCrop(poseId: string, crop: PhotoCrop): boolean {
+const all = getPhotoCrops();
+all[poseId] = crop;
+return write(K.photoCrops, all);
+}
+
+export function removePhotoCrop(poseId: string): void {
+const all = getPhotoCrops();
+delete all[poseId];
+write(K.photoCrops, all);
 }
 
 /* ------------------------- یادداشت شخصی ------------------------- */
@@ -266,9 +312,43 @@ const remaining = getCustomPoses().filter((p) => p.id !== id);
 return write(K.promoted, promoted) && write(K.custom, remaining);
 }
 
+/**
+ * ویرایش‌های ذخیره‌شده روی ژست‌های «از قبل موجود» (آماده/وارداتی/ترفیع‌گرفته).
+ * برخلاف ژست‌های شخصی که کل رکوردشان در pd_custom_poses ذخیره می‌شود، این‌ها
+ * فقط یک Overlay روی رکورد اصلی هستند تا در getAllPoses() جایگزین آن شوند —
+ * بدون این‌که رکورد اصلی و ویرایش‌شده هر دو با هم (Duplicate) نمایش داده شوند.
+ */
+export function getPoseEdits(): Record<string, Pose> {
+return read<Record<string, Pose>>(K.poseEdits, {});
+}
+
+/** ذخیره ویرایش کامل یک ژست «از قبل موجود» (نه ژست شخصی تازه) */
+export function savePoseEdit(pose: Pose): { ok: boolean; error?: string } {
+const edits = getPoseEdits();
+edits[pose.id] = pose;
+const ok = write(K.poseEdits, edits);
+return ok
+? { ok: true }
+: {
+ok: false,
+error:
+'حافظه دستگاه پر شده است. چند ژست قدیمی یا عکس‌های مرجع را حذف کنید و دوباره تلاش کنید.',
+};
+}
+
+function clearPoseEdit(id: string): void {
+const edits = getPoseEdits();
+if (!(id in edits)) return;
+delete edits[id];
+write(K.poseEdits, edits);
+}
+
 /** حذف هر نوع ژست، چه اصلی و چه شخصی */
 export function deletePoseEverywhere(pose: Pose): void {
 if (pose.isCustom) {
+// Tombstone ژست شخصی هم باید داخل بسته انتقال بماند؛ ممکن است همین ژست
+// در نسخه قبلی وارد سورس شده باشد وگرنه در نسخه بعدی دوباره ظاهر می‌شود.
+write(K.deletedBuiltin, Array.from(new Set([...getDeletedBuiltinIds(), pose.id])));
 deleteCustomPose(pose.id);
 return;
 }
@@ -276,6 +356,7 @@ write(K.promoted, getPromotedPoses().filter((p) => p.id !== pose.id));
 if (INITIAL_POSES.some((p) => p.id === pose.id)) {
 write(K.deletedBuiltin, Array.from(new Set([...getDeletedBuiltinIds(), pose.id])));
 }
+clearPoseEdit(pose.id);
 setFavoriteIds(getFavoriteIds().filter((x) => x !== pose.id));
 const notes = getNotes();
 delete notes[pose.id];
@@ -302,6 +383,7 @@ export function deleteCustomPose(id: string): Pose[] {
 const next = getCustomPoses().filter((p) => p.id !== id);
 write(K.custom, next);
 removeUserPhoto(id);
+removePhotoCrop(id);
 const notes = getNotes();
 delete notes[id];
 write(K.notes, notes);
@@ -314,15 +396,25 @@ return next;
 /** ژست‌های آماده + ژست‌های کاربر، با عکس‌ها و یادداشت‌های ذخیره‌شده */
 export function getAllPoses(): Pose[] {
 const photos = getUserPhotos();
+const ratios = getPhotoRatios();
+const crops = getPhotoCrops();
 const notes = getNotes();
+const edits = getPoseEdits();
+// enrichPose تضمین می‌کند حتی ژست‌های ذخیره‌شده‌ی قدیمی (که metadata تاکسونومی
+// جدید را ندارند) هنگام خواندن، سناریو و ویژگی‌هایشان محاسبه شود.
 const merge = (p: Pose): Pose => {
-const photo = photos[p.id];
-return {
-...p,
-image: photo || p.image,
-note: notes[p.id],
-isAnimated: photo ? isAnimatedDataUrl(photo) : p.isAnimated,
-};
+// اگر کاربر این ژست را از داخل برنامه ویرایش کرده، نسخه ویرایش‌شده جایگزین
+// رکورد اصلی می‌شود (همان id، بدون Duplicate شدن در فهرست).
+const base = edits[p.id] ? { ...p, ...edits[p.id] } : p;
+const photo = photos[base.id];
+return enrichPose({
+...base,
+image: photo || base.image,
+imageRatio: ratios[base.id] || base.imageRatio || '4/3',
+note: notes[base.id],
+isAnimated: photo ? isAnimatedDataUrl(photo) : base.isAnimated,
+photoCrop: photo ? crops[base.id] : undefined,
+});
 };
 const deleted = new Set(getDeletedBuiltinIds());
 const promotedIds = new Set(getPromotedPoses().map((p) => p.id));
@@ -420,15 +512,35 @@ const queryTerms = expandQuery(f.search || '');
 const queryWords = normalize(f.search || '').split(' ').filter(Boolean);
 return poses.filter((p) => {
 if (f.customOnly && !p.isCustom) return false;
+
+/* --- محور اصلی: سناریوی تصویربرداری --- */
+if (f.scenario && f.scenario !== 'همه' && scenarioOf(p) !== f.scenario) return false;
+if (f.detailSubject && f.detailSubject !== 'همه' && p.detailSubject !== f.detailSubject) return false;
+
+/* --- عمومی یا اختصاصی لوکیشن --- */
+if (f.scope && f.scope !== 'همه' && scopeOf(p) !== f.scope) return false;
+
+/**
+ * لوکیشن دیگر «مالکیت» نیست، «سازگاری» است: هر ژست عمومی که در این محیط
+ * قابل اجراست این‌جا دیده می‌شود، به علاوه ژست‌های اختصاصی همان محیط.
+ */
+if (f.location !== 'همه' && !runsIn(p, f.location)) return false;
+
+/* --- Attributes --- */
+if (f.framing && f.framing !== 'همه' && p.framing !== f.framing) return false;
+if (f.mood && f.mood !== 'همه' && p.mood !== f.mood) return false;
+if (f.movement && f.movement !== 'همه') {
+const wants = f.movement === 'دارد';
+if (!!p.movement !== wants) return false;
+}
+if (f.environment && f.environment !== 'همه') {
+// «هر دو» با هر انتخابی سازگار است
+if (p.environment !== 'هر دو' && p.environment !== f.environment) return false;
+}
+
 if (f.category !== 'همه' && p.category !== f.category) return false;
 if (f.poseType !== 'همه' && p.poseType !== f.poseType) return false;
 if (f.difficulty !== 'همه' && p.difficulty !== f.difficulty) return false;
-if (f.location !== 'همه' && !p.locations.includes(f.location)) return false;
-if (
-f.location === 'باغ عمارت' &&
-f.gardenSubCategory !== 'همه' &&
-p.gardenSubCategory !== f.gardenSubCategory
-) return false;
 if (f.peopleCount && p.peopleCount !== f.peopleCount) return false;
 
 if (f.search && f.search.trim()) {
@@ -441,6 +553,14 @@ p.difficulty,
 p.note || '',
 p.tags.join(' '),
 p.locations.join(' '),
+scenarioOf(p),
+scopeOf(p),
+p.mood || '',
+p.framing || '',
+p.environment || '',
+p.detailSubject || '',
+p.movement ? 'حرکتی متحرک' : 'ثابت',
+(p.suitableLocations || []).join(' '),
 p.steps.join(' '),
 p.photographerScript.join(' '),
 p.variations.join(' '),
@@ -516,6 +636,8 @@ favorites: string[];
 recent: string[];
 customPoses: Pose[];
 userPhotos: Record<string, string>;
+photoCrops?: Record<string, PhotoCrop>;
+photoRatios?: Record<string, '4/3' | '3/4'>;
 notes: Record<string, string>;
 prefs: Prefs;
 promotedPoses?: Pose[];
@@ -527,13 +649,31 @@ myLocations?: MyLocation[];
 export interface PosePack {
 app: 'pose-director';
 exportType: 'pose-pack';
-version: 1;
+version: 2;
 exportedAt: string;
 /** false تا وقتی کلود این بسته را داخل سورس کد اضافه کند؛ برای ردیابی بسته‌های پشت‌سرهم. */
 reviewed: false;
 poses: Pose[];
 userPhotos: Record<string, string>;
 photoManifest: Array<{ code: string; title: string; filename: string }>;
+/**
+ * عکس‌هایی که برای ژست‌های «از قبل موجود» (آماده/وارداتی/ترفیع‌گرفته - نه
+ * ژست تازه‌ی شخصی) عوض شده‌اند. این‌ها فقط باید جایگزین عکس همان ژست در
+ * سورس شوند؛ نباید یک ژست جدید از رویشان ساخته شود.
+ */
+photoUpdates: Array<{ id: string; title: string; filename: string; imageRatio: '4/3' | '3/4'; originalImage?: string }>;
+/**
+ * ژست‌های «از قبل موجود» که کاربر از داخل برنامه ویرایش کرده (عنوان،
+ * مراحل، دیالوگ، دوربین و ...). باید در سورس، رکورد همان id جایگزین شود؛
+ * نه این‌که یک ژست تازه ساخته شود.
+ */
+poseEdits: Pose[];
+/**
+ * شناسه ژست‌هایی که کاربر از داخل برنامه حذف کرده (آماده/وارداتی/ترفیع‌گرفته).
+ * باید در نسخه بعدی برنامه هم پنهان بمانند، حتی برای نصب‌های تازه — یعنی
+ * باید از سورس هم حذف/exclude شوند، نه فقط در حافظه همین دستگاه.
+ */
+deletedBuiltinIds: string[];
 }
 
 export function buildBackup(): Backup {
@@ -545,6 +685,8 @@ favorites: getFavoriteIds(),
 recent: getRecentIds(),
 customPoses: getCustomPoses(),
 userPhotos: getUserPhotos(),
+photoCrops: getPhotoCrops(),
+photoRatios: getPhotoRatios(),
 notes: getNotes(),
 prefs: getPrefs(),
 promotedPoses: getPromotedPoses(),
@@ -554,17 +696,47 @@ myLocations: getMyLocations(),
 }
 
 export function buildPosePack(): PosePack {
-const poses = getCustomPoses();
+const ratios = getPhotoRatios();
+const poses = getCustomPoses().map((pose) => ({
+...pose,
+imageRatio: ratios[pose.id] || pose.imageRatio || '4/3',
+}));
 const photos = getUserPhotos();
 const userPhotos: Record<string, string> = {};
 poses.forEach((pose) => {
 const photo = photos[pose.id] || pose.image;
 if (photo) userPhotos[pose.id] = photo;
 });
+
+// اگر عکس یک ژستِ «از قبل موجود» (آماده، وارداتی یا ترفیع‌گرفته) عوض شده
+// باشد، آن هم باید در بسته قرار بگیرد؛ وگرنه با تغییر عکس یک ژست آماده،
+// آن عوض‌شدن هیچ‌وقت به نسخه‌ی بعدی برنامه منتقل نمی‌شود چون این ژست جزو
+// getCustomPoses() نیست.
+const customIds = new Set(poses.map((p) => p.id));
+const nonCustomLookup = new Map<string, Pose>();
+[...getPromotedPoses(), ...INITIAL_POSES].forEach((p) => {
+if (!nonCustomLookup.has(p.id)) nonCustomLookup.set(p.id, p);
+});
+const photoUpdates: PosePack['photoUpdates'] = [];
+Object.entries(photos).forEach(([id, dataUrl]) => {
+if (customIds.has(id)) return; // قبلاً همراه ژست شخصی‌اش رفته
+const basePose = nonCustomLookup.get(id);
+if (!basePose) return; // ژستی که دیگر وجود ندارد (مثلاً حذف شده)
+if (basePose.image === dataUrl) return; // عکس تغییری نکرده
+const ext = extensionForDataUrl(dataUrl);
+photoUpdates.push({
+id,
+title: basePose.title,
+filename: `${id}.${ext}`,
+imageRatio: ratios[id] || basePose.imageRatio || '4/3',
+originalImage: basePose.image,
+});
+});
+
 return {
 app: 'pose-director',
 exportType: 'pose-pack',
-version: 1,
+version: 2,
 exportedAt: new Date().toISOString(),
 reviewed: false,
 poses,
@@ -577,6 +749,17 @@ const photo = userPhotos[pose.id];
 const ext = photo ? extensionForDataUrl(photo) : 'jpg';
 return { code, title: pose.title, filename: `${code}.${ext}` };
 }),
+photoUpdates,
+poseEdits: (() => {
+const edits = { ...getPoseEdits() };
+// تغییر نسبت عکسِ ژست آماده هم یک ویرایش واقعی است و باید به سورس نسخه بعدی برسد.
+photoUpdates.forEach((update) => {
+const base = nonCustomLookup.get(update.id);
+if (base) edits[update.id] = { ...base, ...edits[update.id], imageRatio: update.imageRatio };
+});
+return Object.values(edits);
+})(),
+deletedBuiltinIds: getDeletedBuiltinIds(),
 };
 }
 
@@ -601,7 +784,14 @@ return null;
  */
 export async function buildPosePackZip(): Promise<{ blob: Blob; count: number } | null> {
 const pack = buildPosePack();
-if (!pack.poses.length) return null;
+if (
+!pack.poses.length &&
+!pack.photoUpdates.length &&
+!pack.poseEdits.length &&
+!pack.deletedBuiltinIds.length
+) {
+return null;
+}
 const JSZip = (await import('jszip')).default;
 const zip = new JSZip();
 const { userPhotos: _omit, ...manifestForJson } = pack;
@@ -618,6 +808,23 @@ if (!bytes) return;
 photosFolder?.file(entry.filename, bytes);
 count += 1;
 });
+
+// عکس‌های تغییرکرده‌ی ژست‌های از قبل موجود (نه ژست تازه)؛ در پوشه‌ای جدا
+// می‌روند تا با import-pose-pack.mjs به‌جای «ژست جدید»، فقط جایگزین عکس
+// همان ژست موجود شوند.
+if (pack.photoUpdates.length) {
+const updatesFolder = zip.folder('photos-updated');
+const allPhotos = getUserPhotos();
+pack.photoUpdates.forEach((entry) => {
+const photo = allPhotos[entry.id];
+if (!photo) return;
+const bytes = dataUrlToBytes(photo);
+if (!bytes) return;
+updatesFolder?.file(entry.filename, bytes);
+count += 1;
+});
+}
+
 const blob = await zip.generateAsync({ type: 'blob' });
 return { blob, count };
 }
@@ -632,6 +839,8 @@ if (Array.isArray(data.customPoses)) write(K.custom, data.customPoses);
 if (Array.isArray(data.favorites)) write(K.fav, data.favorites);
 if (Array.isArray(data.recent)) write(K.recent, data.recent);
 if (data.userPhotos) write(K.photos, data.userPhotos);
+if (data.photoCrops) write(K.photoCrops, data.photoCrops);
+if (data.photoRatios) write(K.photoRatios, data.photoRatios);
 if (data.notes) write(K.notes, data.notes);
 if (data.prefs) savePrefs({ ...DEFAULT_PREFS, ...data.prefs });
 if (Array.isArray(data.promotedPoses)) write(K.promoted, data.promotedPoses);
@@ -681,7 +890,8 @@ export function saveStudioProfile(p: StudioProfile): boolean {
 
 export function getOfficeProjects(): OfficeProject[] {
   const K = { officeProjects: 'pd_office_projects_v1' };
-  return read<OfficeProject[]>(K.officeProjects, []);
+  const value = read<unknown>(K.officeProjects, []);
+  return Array.isArray(value) ? value.filter((item): item is OfficeProject => !!item && typeof item === 'object' && typeof (item as OfficeProject).id === 'string') : [];
 }
 
 export function saveOfficeProject(proj: OfficeProject): { ok: boolean; error?: string } {

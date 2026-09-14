@@ -17,6 +17,11 @@ export interface MediaResult {
   isAnimated: boolean;
 }
 
+/** فایل را بدون هیچ فشرده‌سازی، مستقیم به‌صورت dataURL می‌خواند (برای پیش‌نمایش برش عکس). */
+export function readFileAsDataUrl(file: File | Blob): Promise<string> {
+  return readAsDataUrl(file);
+}
+
 function readAsDataUrl(file: File | Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

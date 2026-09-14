@@ -3,13 +3,15 @@ import {
   CategoryType,
   EMPTY_FILTERS,
   FilterState,
-  GardenSubCategory,
   LocationType,
+  Mood,
   MyLocation,
   Pose,
+  ScenarioCategory,
   ViewTab,
 } from './types/pose';
 import { sortForProgression } from './data/poses';
+import { scopeOf } from './data/taxonomy';
 import {
   Prefs,
   deletePoseEverywhere,
@@ -127,7 +129,7 @@ export default function App() {
   const askExit = useCallback(() => {
     setConfirmRequest({
       title: 'خروج از برنامه',
-      text: 'آیا می‌خواهید از کارگردان ژست خارج شوید؟',
+      text: 'آیا می‌خواهید از Atelito خارج شوید؟',
       confirmLabel: 'خروج',
       cancelLabel: 'ماندن',
       tone: 'gold',
@@ -303,16 +305,55 @@ export default function App() {
     goTab('library');
   };
 
+  /**
+   * لوکیشن = Context. فیلتر «قابل اجرا در این لوکیشن» می‌شود، نه «مالِ این لوکیشن»؛
+   * بنابراین ژست‌های عمومی سازگار هم دیده می‌شوند.
+   */
   const pickLocation = (l: LocationType) => {
     setFilters({ ...EMPTY_FILTERS, location: l });
     goTab('library');
   };
 
-  /** بخش ۷.۱: شروع سریع از دکمه «الان کجای مراسمی؟» در خانه */
-  const startQuickShoot = (location: LocationType, gsc: GardenSubCategory | 'همه') => {
-    const base: FilterState = { ...EMPTY_FILTERS, location, gardenSubCategory: gsc };
+  /** فقط ژست‌هایی که واقعاً به ویژگی فیزیکی همان محیط وابسته‌اند */
+  const pickLocationSpecial = (l: LocationType) => {
+    setFilters({ ...EMPTY_FILTERS, location: l, scope: 'اختصاصی لوکیشن' });
+    goTab('library');
+  };
+
+  /** محور اصلی ناوبری: مرحله سناریوی تصویربرداری */
+  const pickScenario = (sc: ScenarioCategory) => {
+    setFilters({ ...EMPTY_FILTERS, scenario: sc });
+    goTab('library');
+  };
+
+  /** ورود از سمت نیاز کاربر: «یک ژست رمانتیک دونفره می‌خواهم» */
+  const pickMood = (m: Mood) => {
+    setFilters({ ...EMPTY_FILTERS, mood: m });
+    goTab('library');
+  };
+
+  /**
+   * شروع سریع: اول مرحله سناریو، بعد (اختیاری) لوکیشن.
+   *  • بدون لوکیشن → فقط ژست‌های عمومی همان مرحله.
+   *  • با لوکیشن   → ژست‌های عمومی سازگار + ژست‌های اختصاصی همان محیط،
+   *                  به‌طوری‌که اختصاصی‌ها انتهای صف بیایند (امضای همان لوکیشن).
+   */
+  const startQuickShoot = (scenario: ScenarioCategory | 'همه', location: LocationType | null) => {
+    const base: FilterState = {
+      ...EMPTY_FILTERS,
+      scenario,
+      location: location || 'همه',
+      scope: location ? 'همه' : 'عمومی',
+    };
     let queue = sortForProgression(filterPoses(poses, base, favoriteIds));
-    if (queue.length === 0) queue = sortForProgression(filterPoses(poses, { ...EMPTY_FILTERS, location }, favoriteIds));
+    if (location) {
+      const general = queue.filter((p) => scopeOf(p) === 'عمومی');
+      const special = queue.filter((p) => scopeOf(p) !== 'عمومی');
+      queue = [...general, ...special];
+    }
+    if (queue.length === 0) {
+      queue = sortForProgression(filterPoses(poses, { ...EMPTY_FILTERS, scenario }, favoriteIds));
+    }
     if (queue.length === 0) { toast('ژستی برای این بخش پیدا نشد.', false); return; }
     setShootQueue(queue);
     setShootIndex(0);
@@ -413,9 +454,13 @@ export default function App() {
   };
 
   const saveOfficeProj = (p: any) => {
-    saveOfficeProject(p);
-    reload();
-    toast('پروژه ذخیره شد.');
+    const result = saveOfficeProject(p);
+    if (result.ok) {
+      reload();
+      toast('پروژه ذخیره شد.');
+    } else {
+      toast(result.error || 'ذخیره پروژه انجام نشد.', false);
+    }
   };
 
   const deleteOfficeProj = (id: string) => {
@@ -463,6 +508,8 @@ export default function App() {
             onOpenAddPose={openAddPose}
             onPickCategory={pickCategory}
             onPickLocation={pickLocation}
+            onPickScenario={pickScenario}
+            onPickMood={pickMood}
             onTab={goTab}
             selectedLocation={selectedLocation}
             onOpenWeather={() => goTab('weather')}
@@ -474,6 +521,7 @@ export default function App() {
         {tab === 'library' && (
           <LibraryView
             poses={filtered}
+            allPoses={poses}
             filters={filters}
             onFilters={setFilters}
             favoriteIds={favoriteIds}
@@ -484,7 +532,13 @@ export default function App() {
           />
         )}
 
-        {tab === 'locations' && <LocationsView poses={poses} onPickLocation={pickLocation} />}
+        {tab === 'locations' && (
+          <LocationsView
+            poses={poses}
+            onPickLocation={pickLocation}
+            onPickLocationSpecial={pickLocationSpecial}
+          />
+        )}
 
         {tab === 'mylocations' && (
           <MyLocationsView
@@ -574,6 +628,7 @@ export default function App() {
             onNextPose={() => nextPose(false)}
             onDataChanged={reload}
             onDelete={removePose}
+            onEdit={editPose}
             onAddToProject={addToProject}
             onToast={toast}
             bigScript={prefs.bigScript}
@@ -594,7 +649,7 @@ export default function App() {
         activeTab={tab}
         onTabChange={goTab}
         favoritesCount={favoriteIds.length}
-        onOpenOffice={() => goTab('office')}
+        onQuickStart={() => setQuickStartOpen(true)}
       />
 
       <SideMenu
@@ -664,6 +719,7 @@ export default function App() {
         onToggleFavorite={handleFavorite}
         bigScript={prefs.bigScript}
         queuePosition={shootQueue.length ? { index: shootIndex, total: shootQueue.length } : undefined}
+        onDataChanged={reload}
       />
     </div>
   );

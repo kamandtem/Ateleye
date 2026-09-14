@@ -10,21 +10,20 @@ import {
   Trash2,
   StickyNote,
   Check,
-  Users,
-  MapPin,
   Clapperboard,
-  FolderPlus,
-  RectangleHorizontal,
-  RectangleVertical,
+  Plus,
+  Pencil,
 } from 'lucide-react';
-import { Pose } from '../types/pose';
+import { CAMERA_MOVEMENT_OPTIONS, MOVEMENT_TOOL_OPTIONS, Pose } from '../types/pose';
 import { PoseVisual } from '../components/PoseVisual';
 import { ScriptPanel } from '../components/ScriptPanel';
 import { PoseChecklist } from '../components/PoseChecklist';
 import { Accordion } from '../components/Accordion';
-import { FilmPlan } from '../components/FilmPlan';
-import { AnimatedFileTooLargeError, fileToCompressedDataUrl } from '../services/media';
-import { removeUserPhoto, setNote, setUserPhoto } from '../services/storage';
+import { PoseAttributes } from '../components/PoseAttributes';
+import { scenarioOf, scopeLabel } from '../data/taxonomy';
+import { PhotoCropModal, CropRatio, CropPosition } from '../components/PhotoCropModal';
+import { AnimatedFileTooLargeError, MAX_ANIMATED_KB, isAnimatedFile, readFileAsDataUrl } from '../services/media';
+import { removePhotoCrop, setNote, setPhotoCrop, setPhotoRatio, setUserPhoto } from '../services/storage';
 
 interface Props {
   pose: Pose;
@@ -34,6 +33,7 @@ interface Props {
   onNextPose: () => void;
   onDataChanged: () => void;
   onDelete: (pose: Pose) => void;
+  onEdit: (pose: Pose) => void;
   onAddToProject: (pose: Pose) => void;
   onToast: (text: string, ok?: boolean) => void;
   bigScript: boolean;
@@ -47,6 +47,7 @@ export const PoseDetailView: React.FC<Props> = ({
   onNextPose,
   onDataChanged,
   onDelete,
+  onEdit,
   onAddToProject,
   onToast,
   bigScript,
@@ -55,33 +56,36 @@ export const PoseDetailView: React.FC<Props> = ({
   const [noteText, setNoteText] = useState(pose.note || '');
   const [savedNote, setSavedNote] = useState(false);
   const [filmOpen, setFilmOpen] = useState(false);
-  const [ratio, setRatio] = useState<'4/3' | '3/4'>(
-    () => ((typeof localStorage !== 'undefined' && localStorage.getItem('pd_detail_ratio')) === '3/4' ? '3/4' : '4/3')
-  );
-  const toggleRatio = () =>
-    setRatio((r) => {
-      const next = r === '4/3' ? '3/4' : '4/3';
-      try { localStorage.setItem('pd_detail_ratio', next); } catch { /* حافظه پر */ }
-      return next;
-    });
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+  const [cropAnimated, setCropAnimated] = useState(false);
+  const [ratio, setRatioState] = useState<CropRatio>(pose.imageRatio || '4/3');
+  const setRatio = (next: CropRatio) => {
+    setRatioState(next);
+    setPhotoRatio(pose.id, next);
+  };
 
   useEffect(() => {
     setNoteText(pose.note || '');
     setSavedNote(false);
-  }, [pose.id, pose.note]);
+    setRatioState(pose.imageRatio || '4/3');
+    setFilmOpen(false);
+  }, [pose.id, pose.note, pose.imageRatio]);
 
   const pickPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
     try {
-      const { dataUrl } = await fileToCompressedDataUrl(file);
-      const ok = setUserPhoto(pose.id, dataUrl);
-      onToast(
-        ok ? 'عکس مرجع شما برای این ژست ذخیره شد.' : 'حافظه پر است؛ چند عکس قدیمی را حذف کنید.',
-        ok
-      );
-      onDataChanged();
+      const animated = await isAnimatedFile(file);
+      if (animated) {
+        const kb = file.size / 1024;
+        if (kb > MAX_ANIMATED_KB) {
+          throw new AnimatedFileTooLargeError(MAX_ANIMATED_KB);
+        }
+      }
+      const dataUrl = await readFileAsDataUrl(file);
+      setCropAnimated(animated);
+      setCropSrc(dataUrl);
     } catch (err) {
       if (err instanceof AnimatedFileTooLargeError) {
         onToast(`حجم گیف را کاهش دهید (حداکثر ${Math.round(err.limitKb / 1024)} مگابایت).`, false);
@@ -91,9 +95,16 @@ export const PoseDetailView: React.FC<Props> = ({
     }
   };
 
-  const dropPhoto = () => {
-    removeUserPhoto(pose.id);
-    onToast('عکس مرجع حذف شد.', true);
+  const handleCropConfirm = (dataUrl: string, chosenRatio: CropRatio, crop?: CropPosition) => {
+    const ok = setUserPhoto(pose.id, dataUrl);
+    if (crop) setPhotoCrop(pose.id, crop);
+    else removePhotoCrop(pose.id);
+    setRatio(chosenRatio);
+    setCropSrc(null);
+    onToast(
+      ok ? 'عکس مرجع شما برای این ژست ذخیره شد.' : 'حافظه پر است؛ چند عکس قدیمی را حذف کنید.',
+      ok
+    );
     onDataChanged();
   };
 
@@ -108,129 +119,93 @@ export const PoseDetailView: React.FC<Props> = ({
     <div className="space-y-4">
       {/* تصویر و هدر */}
       <div className="card overflow-hidden">
-        <div
-          className={
-            ratio === '3/4'
-              ? 'relative mx-auto w-[min(80%,320px)] aspect-[3/4]'
-              : 'relative w-full aspect-[4/3]'
-          }
-        >
-          <PoseVisual pose={pose} />
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                'linear-gradient(to top, color-mix(in srgb, var(--color-bg) 96%, transparent), transparent 52%)',
-            }}
-          />
-
-          <button
-            onClick={onBack}
-            className="absolute top-3 right-3 p-2 rounded-full"
-            style={{ background: 'rgba(8,6,14,.55)', backdropFilter: 'blur(6px)' }}
-            aria-label="بازگشت"
-          >
-            <ChevronRight className="w-5 h-5" style={{ color: '#F4F1EA' }} />
-          </button>
-
-          <button
-            onClick={() => onDelete(pose)}
-            className="absolute top-3 left-14 p-2 rounded-full"
-            style={{ background: 'rgba(8,6,14,.55)', backdropFilter: 'blur(6px)' }}
-            aria-label="حذف ژست"
-          >
-            <Trash2 className="w-5 h-5" style={{ color: 'var(--color-rose)' }} />
-          </button>
-
-          <button
-            onClick={(e) => onToggleFavorite(pose.id, e)}
-            className="absolute top-3 left-3 p-2 rounded-full"
-            style={{
-              background: isFavorite ? 'var(--color-rose)' : 'rgba(8,6,14,.55)',
-              backdropFilter: 'blur(6px)',
-            }}
-            aria-label="نشان کردن"
-          >
-            <Heart className="w-5 h-5" style={{ color: '#fff' }} fill={isFavorite ? '#fff' : 'none'} />
-          </button>
-
-          <div className="absolute bottom-3 right-4 left-4">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="pill !text-[10px]">{pose.category}</span>
-              <span className="pill !text-[10px]">{pose.poseType}</span>
-              <span className="pill !text-[10px]">{pose.difficulty}</span>
-            </div>
-            <h1 className="mt-2 text-[19px] font-extrabold leading-snug">{pose.title}</h1>
-          </div>
-        </div>
-
-        <div className="p-3 flex items-center justify-between gap-2 border-t border-line">
-          <div className="flex items-center gap-3 text-[11px] text-muted">
-            <span className="flex items-center gap-1">
-              <Users className="w-3.5 h-3.5" />
-              {pose.peopleCount} نفر
-            </span>
-            <span className="flex items-center gap-1">
-              <MapPin className="w-3.5 h-3.5" />
-              {pose.locations.join(' · ')}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={toggleRatio}
-              className="btn btn-ghost !py-2 !px-2.5"
-              aria-label="تغییر نسبت تصویر"
-              title={ratio === '4/3' ? 'نمای عمودی (۳:۴)' : 'نمای افقی (۴:۳)'}
-            >
-              {ratio === '4/3'
-                ? <RectangleVertical className="w-3.5 h-3.5 text-gold" />
-                : <RectangleHorizontal className="w-3.5 h-3.5 text-gold" />}
-            </button>
-            <button onClick={() => fileRef.current?.click()} className="btn btn-ghost !py-2 !px-3 !text-[11px]">
-              <ImagePlus className="w-3.5 h-3.5 text-gold" />
-              {pose.image ? 'تغییر عکس' : 'عکس مرجع'}
-            </button>
-            {pose.image && (
-              <button
-                onClick={dropPhoto}
-                className="btn btn-ghost !py-2 !px-2.5"
-                aria-label="حذف عکس مرجع"
-              >
-                <Trash2 className="w-3.5 h-3.5" style={{ color: 'var(--color-rose)' }} />
+        {filmOpen ? (
+          <div className="p-4 min-h-[360px] a-fade-up" onClick={() => setFilmOpen(false)} role="button" tabIndex={0}>
+            <div className="flex items-start justify-between gap-3 mb-5">
+              <div>
+                <span className="text-[10px] font-extrabold text-rose">پشت کارت ژست</span>
+                <h2 className="text-[18px] font-extrabold mt-1">اطلاعات فیلم‌برداری</h2>
+                <p className="text-[11px] text-muted mt-1">برای برگشت به عکس، روی فضای خالی کارت بزن.</p>
+              </div>
+              <button onClick={(e) => { e.stopPropagation(); setFilmOpen(false); }} className="btn btn-ghost !px-3 !py-2 !text-[11px]">
+                <ChevronRight className="w-4 h-4" /> عکس ژست
               </button>
-            )}
+            </div>
+            <div className="space-y-3" onClick={(e) => e.stopPropagation()}>
+              <div className="grid grid-cols-2 gap-2">
+                <FilmDetail label="حرکت دوربین" text={CAMERA_MOVEMENT_OPTIONS.find((item) => item.key === pose.cameraMovementType)?.label || pose.cameraMovement} />
+                <FilmDetail label="ابزار حرکتی" text={MOVEMENT_TOOL_OPTIONS.find((item) => item.key === pose.movementTool)?.label} />
+              </div>
+              <FilmDetail label="حرکت سوژه" text={pose.subjectMovement} />
+              <FilmDetail label="اکت و اجرای سوژه" text={pose.actionDescription} />
+              <button onClick={() => onEdit(pose)} className="btn btn-primary w-full !mt-4">
+                <Pencil className="w-4 h-4" /> ویرایش همه اطلاعات ژست
+              </button>
+            </div>
           </div>
-        </div>
-        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={pickPhoto} />
+        ) : (
+          <>
+            <div
+              onClick={() => setFilmOpen(true)}
+              className={`${ratio === '3/4' ? 'relative mx-auto w-[min(80%,320px)] aspect-[3/4]' : 'relative w-full aspect-[4/3]'} cursor-pointer`}
+              aria-label="نمایش اطلاعات فیلم‌برداری ژست"
+            >
+              <PoseVisual pose={{ ...pose, imageRatio: ratio }} />
+              <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, color-mix(in srgb, var(--color-bg) 96%, transparent), transparent 52%)' }} />
+
+              <button onClick={(e) => { e.stopPropagation(); onBack(); }} className="absolute top-3 right-3 p-2 rounded-full" style={{ background: 'rgba(8,6,14,.55)', backdropFilter: 'blur(6px)' }} aria-label="بازگشت">
+                <ChevronRight className="w-5 h-5" style={{ color: '#F4F1EA' }} />
+              </button>
+              <button onClick={(e) => { e.stopPropagation(); onDelete(pose); }} className="absolute top-3 left-14 p-2 rounded-full" style={{ background: 'rgba(8,6,14,.55)', backdropFilter: 'blur(6px)' }} aria-label="حذف ژست">
+                <Trash2 className="w-5 h-5" style={{ color: 'var(--color-rose)' }} />
+              </button>
+              <button onClick={(e) => onToggleFavorite(pose.id, e)} className="absolute top-3 left-3 p-2 rounded-full" style={{ background: isFavorite ? 'var(--color-rose)' : 'rgba(8,6,14,.55)', backdropFilter: 'blur(6px)' }} aria-label="نشان کردن">
+                <Heart className="w-5 h-5" style={{ color: '#fff' }} fill={isFavorite ? '#fff' : 'none'} />
+              </button>
+              <button onClick={(e) => { e.stopPropagation(); onEdit(pose); }} className="absolute top-14 left-3 p-2 rounded-full" style={{ background: 'rgba(8,6,14,.55)', backdropFilter: 'blur(6px)' }} aria-label="ویرایش همه بخش‌های ژست">
+                <Pencil className="w-5 h-5" style={{ color: 'var(--color-gold)' }} />
+              </button>
+
+              <div className="absolute bottom-3 right-4 left-4 pointer-events-none">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="pill !text-[10px] pill-on">{scenarioOf(pose)}</span>
+                  <span className="pill !text-[10px]">{scopeLabel(pose)}</span>
+                  <span className="pill !text-[10px]">{pose.category}</span>
+                  <span className="pill !text-[10px]">{pose.poseType}</span>
+                  <span className="pill !text-[10px]">{pose.difficulty}</span>
+                </div>
+                <h1 className="mt-2 text-[19px] font-extrabold leading-snug">{pose.title}</h1>
+              </div>
+            </div>
+
+            <div className="p-3 border-t border-line">
+              <div className="flex items-center gap-2">
+                <button onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }} className="btn btn-ghost flex-1 !text-[11.5px] whitespace-nowrap">
+                  <ImagePlus className="w-3.5 h-3.5 text-gold shrink-0" />
+                  {pose.image ? 'تغییر عکس' : 'عکس مرجع'}
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); onAddToProject(pose); }} className="btn btn-ghost flex-1 !text-[11.5px] whitespace-nowrap">
+                  <Plus className="w-3.5 h-3.5 text-gold shrink-0" />
+                  افزودن به پروژه روز
+                </button>
+              </div>
+            </div>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={pickPhoto} />
+          </>
+        )}
       </div>
 
-      {/* اقدام سریع */}
-      <div className="flex items-center gap-2">
-        <button onClick={() => setFilmOpen(true)} className="btn btn-ghost" aria-label="فیلم‌برداری همین ژست" title="فیلم‌برداری همین ژست">
-          <Clapperboard className="w-4 h-4 text-rose" />
+      <div className="grid grid-cols-2 gap-2 pb-1">
+        <button onClick={onNextPose} className="btn btn-ghost !py-3.5 !text-[13px]">
+          <Shuffle className="w-4 h-4 text-gold" /> بعدی
         </button>
-        <button onClick={onNextPose} className="btn btn-ghost">
-          <Shuffle className="w-4 h-4 text-gold" />
-          بعدی
+        <button onClick={() => setFilmOpen(true)} className="btn !py-3.5 !text-[13px]" style={{ background: 'var(--color-rose)', color: '#fff' }}>
+          <Clapperboard className="w-4 h-4" /> فیلم‌برداری این ژست
         </button>
       </div>
 
-      {/* Execution Buttons */}
-      <div className="flex items-center gap-2 pb-2">
-        <button onClick={() => onAddToProject(pose)} className="btn btn-ghost flex-1">
-          <FolderPlus className="w-4 h-4" />
-          افزودن به ژست روز
-        </button>
-        <button
-          onClick={() => setFilmOpen(true)}
-          className="btn btn-ghost flex-1"
-          style={{ color: 'var(--color-rose)' }}
-        >
-          <Clapperboard className="w-4 h-4" />
-          فیلم‌برداری این ژست
-        </button>
-      </div>
+      {/* ویژگی‌های ژست: انتقال مدل ذهنی «یک ژست، چند Attribute» */}
+      <PoseAttributes pose={pose} />
 
       {/* ترتیب اجرای ژست: اول راهنما، بعد تنوع و فیلم، سپس جزئیات */}
       <Accordion defaultOpen title="مراحل اجرا">
@@ -333,11 +308,26 @@ export const PoseDetailView: React.FC<Props> = ({
           </span>
         ))}
       </div>
-      <FilmPlan pose={pose} open={filmOpen} onClose={() => setFilmOpen(false)} />
+      {cropSrc && (
+        <PhotoCropModal
+          imageSrc={cropSrc}
+          initialRatio={ratio}
+          animated={cropAnimated}
+          onCancel={() => setCropSrc(null)}
+          onConfirm={handleCropConfirm}
+        />
+      )}
     </div>
   );
 };
 
+
+const FilmDetail: React.FC<{ label: string; text?: string }> = ({ label, text }) => (
+  <div className="rounded-2xl border border-line p-3">
+    <span className="text-[10px] font-extrabold text-gold">{label}</span>
+    <p className="text-[12.5px] leading-relaxed mt-1.5">{text || 'هنوز ثبت نشده است.'}</p>
+  </div>
+);
 
 const Detail: React.FC<{ label: string; text: string }> = ({ label, text }) => (
   <div>

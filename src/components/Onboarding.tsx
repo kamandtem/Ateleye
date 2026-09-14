@@ -1,92 +1,60 @@
 import React, { useState } from 'react';
-import { ChevronLeft, Check, Clapperboard, Mic, Map, PlusCircle } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
-import { LogoMark } from './Logo';
+import { ArrowLeft, ArrowRight, Check, Sparkles } from 'lucide-react';
+import studioIllustration from '../assets/onboarding/studio-photographer.svg';
+import cameraIllustration from '../assets/onboarding/camera.svg';
+import outdoorIllustration from '../assets/onboarding/outdoor-photoshoot.svg';
 
-const SLIDES: { icon: LucideIcon; title: string; text: string }[] = [
-  {
-    icon: Clapperboard,
-    title: 'کارگردان ژست',
-    text: 'وسط پروژه عکاسی، دیگر لازم نیست دنبال ایده بگردید. ۱۲۰ ژست آماده با مراحل اجرا، فرم بدن و دیالوگ دقیق برای هدایت سوژه.',
-  },
-  {
-    icon: Mic,
-    title: 'چی به سوژه بگم؟',
-    text: 'برای هر ژست، جمله‌های آماده‌ای داریم که مستقیم به عروس و داماد می‌گویید. حتی می‌توانید صوتش را پخش کنید.',
-  },
-  {
-    icon: Map,
-    title: 'بر اساس لوکیشن',
-    text: 'جنوب، شمال، کویر و باغ عمارت. برای هر لوکیشن راهنمای نور، بهترین ساعت، استایل لباس و تجهیزات پیشنهادی آماده است.',
-  },
-  {
-    icon: PlusCircle,
-    title: 'ژست‌های خودتان',
-    text: 'هر ژستی که جایی دیدید و پسندیدید را با عکس و مراحل اجرا ذخیره کنید. با تگ‌گذاری، هر وقت خواستید سریع پیدایش می‌کنید.',
-  },
+const SLIDES = [
+  { image: studioIllustration, number: '۰۱', label: 'فضای کاری تو', title: 'آتلیه‌ات را از همین‌جا جمع‌وجور کن', text: 'پروژه‌ها، مشتری‌ها و جزئیات هر مراسم را یک‌جا نگه دار؛ مرتب، سریع و آماده برای روز عکاسی.', accent: 'olive' },
+  { image: cameraIllustration, number: '۰۲', label: 'ایده برای هر قاب', title: 'وقتی ایده کم می‌آوری، آتلیتو بلده', text: 'ژست مناسب را پیدا کن، اجرای آن را قدم‌به‌قدم ببین و با چند کلمه ساده سوژه را هدایت کن.', accent: 'orange' },
+  { image: outdoorIllustration, number: '۰۳', label: 'آماده‌ی ثبت لحظه', title: 'قبل از شات، همه‌چیز آماده است', text: 'لوکیشن، نور، آب‌وهوا و تجهیزات را بررسی کن تا با خیال راحت بروی سراغ قاب بعدی.', accent: 'plum' },
 ];
 
 export const Onboarding: React.FC<{ onDone: () => void }> = ({ onDone }) => {
   const [i, setI] = useState(0);
   const last = i === SLIDES.length - 1;
-  const s = SLIDES[i];
+  const slide = SLIDES[i];
+  const next = () => (last ? onDone() : setI((current) => current + 1));
+  const previous = () => setI((current) => Math.max(0, current - 1));
 
   return (
-    <div className="fixed inset-0 z-[95] bg-bg flex flex-col safe-top safe-bottom">
-      <div className="flex items-center justify-between px-5 pt-4">
-        <LogoMark size={34} />
-        <button onClick={onDone} className="text-[11px] font-bold text-faint">
-          رد کردن
-        </button>
-      </div>
-
-      <div className="flex-1 flex flex-col items-center justify-center px-7 text-center">
-        <div
-          key={i}
-          className="a-pop w-24 h-24 rounded-3xl flex items-center justify-center mb-7"
-          style={{
-            background: 'color-mix(in srgb, var(--color-gold) 14%, transparent)',
-            border: '1px solid color-mix(in srgb, var(--color-gold) 35%, transparent)',
-            color: 'var(--color-gold)',
-          }}
-        >
-          <s.icon className="w-11 h-11" />
+    <div className={`onboarding-shell onboarding-${slide.accent} fixed inset-0 z-[95] safe-top safe-bottom`} dir="rtl">
+      <div className="onboarding-noise" aria-hidden="true" />
+      <header className="onboarding-header">
+        <div className="onboarding-brand" aria-label="Atelito">
+          <span className="onboarding-brand-mark"><Sparkles className="h-4 w-4" /></span>
+          <span>atelito</span>
         </div>
-
-        <h2 key={`t${i}`} className="a-fade-up text-2xl font-extrabold gold-text">
-          {s.title}
-        </h2>
-        <p
-          key={`p${i}`}
-          className="a-fade-up mt-3 text-[13px] leading-7 text-muted max-w-sm"
-          style={{ animationDelay: '.08s' }}
-        >
-          {s.text}
-        </p>
-      </div>
-
-      <div className="px-6 pb-8 space-y-5">
-        <div className="flex items-center justify-center gap-1.5">
-          {SLIDES.map((_, idx) => (
-            <span
-              key={idx}
-              className="h-1.5 rounded-full transition-all"
-              style={{
-                width: idx === i ? '22px' : '6px',
-                background: idx === i ? 'var(--color-gold)' : 'var(--color-line)',
-              }}
-            />
-          ))}
-        </div>
-
-        <button
-          onClick={() => (last ? onDone() : setI(i + 1))}
-          className="btn btn-primary w-full !py-3.5 !text-sm"
-        >
-          {last ? <Check className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-          {last ? 'شروع کار' : 'بعدی'}
-        </button>
-      </div>
+        <button onClick={onDone} className="onboarding-skip">رد کردن</button>
+      </header>
+      <main className="onboarding-main">
+        <section className="onboarding-visual" aria-live="polite">
+          <div className="onboarding-kicker"><span>{slide.number}</span><i /> {slide.label}</div>
+          <div key={`art-${i}`} className="onboarding-art a-pop">
+            <span className="onboarding-orbit" aria-hidden="true" />
+            <span className="onboarding-sun" aria-hidden="true" />
+            <img src={slide.image} alt="" />
+          </div>
+        </section>
+        <section key={`copy-${i}`} className="onboarding-copy a-fade-up">
+          <div className="onboarding-rule" aria-hidden="true"><span>{String(i + 1).padStart(2, '0')}</span><b /></div>
+          <h1>{slide.title}</h1>
+          <p>{slide.text}</p>
+          <div className="onboarding-meta">
+            <div className="onboarding-dots" aria-label={`مرحله ${i + 1} از ${SLIDES.length}`}>
+              {SLIDES.map((_, index) => <button key={index} aria-label={`رفتن به مرحله ${index + 1}`} aria-current={index === i} onClick={() => setI(index)} />)}
+            </div>
+            <span>برای شروع چند قدم کوتاه</span>
+          </div>
+          <div className="onboarding-actions">
+            <button onClick={next} className="onboarding-primary">
+              {last ? 'شروع با آتلیتو' : 'بزن بریم'}
+              {last ? <Check className="h-5 w-5" /> : <ArrowLeft className="h-5 w-5" />}
+            </button>
+            {i > 0 && <button onClick={previous} className="onboarding-back" aria-label="مرحله قبل"><ArrowRight className="h-5 w-5" /></button>}
+          </div>
+        </section>
+      </main>
     </div>
   );
 };

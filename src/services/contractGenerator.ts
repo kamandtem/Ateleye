@@ -1,63 +1,97 @@
 import { OfficeProject, StudioProfile } from '../types/pose';
 
-const fa = (n: number) => n.toLocaleString('fa-IR');
-const esc = (value?: string | number) => String(value ?? '').replace(/[&<>'"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c] || c));
-const formatDate = (iso?: string) => iso ? new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(`${iso}T12:00:00`)) : '................';
+const fa = (n: number) => Number(n || 0).toLocaleString('fa-IR');
+const esc = (value: unknown) => String(value ?? '-').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+const formatDate = (iso?: string) => { const d = iso ? new Date(iso) : new Date(); return Number.isNaN(d.getTime()) ? '-' : d.toLocaleDateString('fa-IR'); };
 
-const TERMS = [
-  'در صورت بی‌احترامی یا دخالت اطرافیان در کار عوامل اجرایی، استودیو می‌تواند فرایند عکاسی و فیلم‌برداری را متوقف کند.',
-  'تحویل نهایی سفارش فقط پس از تسویه کامل انجام می‌شود.',
-  'پرداخت اقساطی فقط با ارائه چک صیادی و تسویه کامل پیش‌پرداخت تا یک هفته پیش از مراسم امکان‌پذیر است.',
-  'سبک خاص عکاسی یا فیلم‌برداری باید پیش از مراسم به استودیو اعلام و در بخش توضیحات ثبت شود.',
-  'پس از تحویل نهایی، استودیو مجاز به حذف فایل‌هاست. در صورت مراجعه‌نکردن، فایل‌ها حداکثر شش ماه نگهداری می‌شوند.',
-  'زمان تحویل آلبوم، دو تا سه ماه پس از تسویه کامل است.',
-  'هزینه ایاب‌وذهاب و پذیرایی پرسنل بر عهده سفارش‌دهنده است.',
-  'لغو قرارداد تا ۳۰ روز پیش از جشن پس از کسر هزینه‌های قانونی ممکن است. پس از آن پیش‌پرداخت قابل استرداد نیست.',
-  'تغییر تاریخ مراسم تا ۶۰ روز بدون افزایش هزینه است. پس از آن هزینه‌ها با نرخ جدید محاسبه می‌شوند.',
-  'آرشیو کامل عکس و فیلم متعلق به استودیو است و تحویل آن فقط در صورت درج در فاکتور یا پرداخت هزینه جداگانه انجام می‌شود.',
-  'هر سفارش یا توافق ویژه فقط در صورتی معتبر است که در این قرارداد ثبت شده باشد.',
-  'اگر تسویه در موعد مقرر انجام نشود، قیمت چاپ، صحافی و سایر خدمات با نرخ روز محاسبه می‌شود.',
-];
-
-function invoiceTable(project: OfficeProject) {
-  const invoice = project.ceremonyInvoice;
-  const items = invoice?.items || [];
-  const subtotal = items.reduce((sum, item) => sum + item.count * item.price, 0);
-  const discount = invoice?.discount || 0;
-  const total = invoice?.total ?? Math.max(0, subtotal - discount);
-  const deposit = invoice?.deposit || 0;
-  const rows = items.map((item, i) => `<tr><td>${fa(i + 1)}</td><td class="desc">${esc(item.name)}</td><td>${fa(item.count)}</td><td>${fa(item.price)}</td><td>${fa(item.count * item.price)}</td></tr>`).join('');
-  return `<table><thead><tr><th>ردیف</th><th class="desc">شرح خدمت یا تجهیز</th><th>تعداد</th><th>فی، تومان</th><th>جمع، تومان</th></tr></thead><tbody>${rows || '<tr><td colspan="5">هنوز ردیفی ثبت نشده است.</td></tr>'}</tbody></table>
-  <div class="totals"><p><span>جمع خدمات</span><b>${fa(subtotal)} تومان</b></p>${discount ? `<p><span>تخفیف</span><b>${fa(discount)} تومان</b></p>` : ''}<p class="grand"><span>مبلغ قرارداد</span><b>${fa(total)} تومان</b></p><p><span>پیش‌پرداخت</span><b>${fa(deposit)} تومان</b></p><p><span>مانده</span><b>${fa(Math.max(0, total - deposit))} تومان</b></p></div>`;
+export function generateContractHTML(project: OfficeProject, profile: StudioProfile | null): string {
+  const items = [...(project.ceremonyInvoice?.items || []), ...(project.formalityInvoice?.items || [])];
+  const total = items.reduce((sum, item) => sum + item.count * item.price, 0);
+  const deposit = (project.ceremonyInvoice?.deposit || 0) + (project.formalityInvoice?.deposit || 0);
+  const remaining = Math.max(0, total - deposit);
+  const rowHtml = items.length ? items.map(item => `<tr><td>${esc(item.name)}</td><td>${fa(item.count)}</td><td>${fa(item.price)}</td><td>${fa(item.count * item.price)}</td></tr>`).join('') : '<tr><td colspan="4">خدمتی ثبت نشده</td></tr>';
+  const services = project.ceremony?.services ? Object.entries(project.ceremony.services).filter(([, value]) => value.checked).map(([name, value]) => `<li>${esc(name)}${value.notes ? `: ${esc(value.notes)}` : ''}</li>`).join('') : '';
+  const cameras = project.ceremony?.cameras ? Object.entries(project.ceremony.cameras).filter(([, count]) => Number(count) > 0).map(([name, count]) => `<li>${esc(name)}، ${fa(Number(count))} دستگاه</li>`).join('') : '';
+  const clauses = ['تحویل نهایی کار پس از تسویه کامل انجام می‌شود.', 'هرگونه سفارش خاص مشتری باید در قرارداد یا توضیحات ثبت شده باشد.', 'فایل‌های پروژه پس از تحویل نهایی حداکثر تا ۶ ماه نگهداری و سپس حذف می‌شوند.', 'هزینه ایاب‌وذهاب و پذیرایی عوامل اجرایی بر عهده مشتری است.', 'تغییر تاریخ مراسم باید حداقل ۶۰ روز پیش از مراسم اعلام شود؛ پس از آن هزینه‌ها براساس نرخ روز محاسبه می‌شوند.', 'قیمت آلبوم و چاپ در صورت تأخیر در تسویه، براساس نرخ روز محاسبه می‌شود.'];
+  return `<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><title>قرارداد ${esc(project.name)}</title><style>
+*{box-sizing:border-box}body{margin:0;background:#f5f1e9;color:#28251f;font-family:Tahoma,Arial,sans-serif;line-height:1.8}.page{width:210mm;min-height:297mm;margin:0 auto 12px;padding:16mm;background:#fffdf8;page-break-after:always}.brand{text-align:center;border-bottom:3px solid #66784c;padding-bottom:12px;margin-bottom:24px}.brand h1{margin:0;color:#52633e;font-size:21px}.muted{color:#777;font-size:11px}.title{color:#52633e;font-weight:bold;margin:18px 0 6px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.box{padding:10px;border:1px solid #d8dfca;border-radius:8px;background:#f8faf1}.box strong{color:#52633e}table{width:100%;border-collapse:collapse;margin-top:10px;font-size:12px}th{background:#e8ecd9;color:#52633e}th,td{padding:8px;border:1px solid #d7ddcc;text-align:right}.num{text-align:center}.total{background:#f5ead7;font-weight:bold}.sign{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:70px;text-align:center}.sign div{border-top:1px solid #777;padding-top:8px;min-height:60px}.footer{margin-top:38px;text-align:center;color:#777;font-size:10px}@page{size:A4;margin:0}@media print{body{background:white}.page{margin:0;box-shadow:none}}
+</style></head><body>
+<div class="page"><div class="brand"><h1>${esc(profile?.name || 'استودیو عکس و فیلم')}</h1><div>قرارداد خدمات عکاسی و فیلمبرداری</div><span class="muted">تاریخ قرارداد: ${formatDate(project.contractDate)}</span></div>
+<div class="title">مشخصات طرفین</div><div class="grid"><div class="box"><strong>داماد:</strong> ${esc(project.groomName)}<br><small>کد ملی: ${esc(project.groomNationalId)}</small></div><div class="box"><strong>عروس:</strong> ${esc(project.brideName)}<br><small>کد ملی: ${esc(project.brideNationalId)}</small></div><div class="box"><strong>شماره تماس:</strong> ${esc(project.clientPhone)}</div><div class="box"><strong>نوع مراسم:</strong> ${esc(project.ceremonyType)}</div></div>
+<div class="title">موضوع قرارداد</div><p>ارائه خدمات عکاسی و فیلمبرداری برای پروژه «${esc(project.name)}» مطابق خدمات، تجهیزات و مبالغ مندرج در این قرارداد.</p>
+<div class="title">مشخصات مراسم</div><div class="grid"><div class="box"><strong>تاریخ مراسم:</strong> ${formatDate(project.ceremony?.date)}<br><strong>محل:</strong> ${esc(project.ceremony?.location)}</div><div class="box"><strong>تاریخ فرمالیته:</strong> ${formatDate(project.formality?.recordDate)}<br><strong>محل:</strong> ${esc(project.formality?.location)}</div></div>
+${services || cameras ? `<div class="title">خدمات و تجهیزات انتخابی</div><div class="grid"><div class="box"><strong>خدمات</strong><ul>${services || '<li>-</li>'}</ul></div><div class="box"><strong>تجهیزات</strong><ul>${cameras || '<li>-</li>'}</ul></div></div>` : ''}
+<div class="title">شرایط قرارداد</div><ul>${clauses.map(x => `<li>${x}</li>`).join('')}</ul>${project.contractNotes ? `<div class="title">توضیحات و سفارش‌های خاص</div><p>${esc(project.contractNotes).replace(/\n/g, '<br>')}</p>` : ''}
+<div class="sign"><div>امضای داماد<br>${esc(project.groomName)}</div><div>امضای عروس<br>${esc(project.brideName)}</div><div>مهر و امضای موسسه<br>${esc(profile?.name || 'استودیو')}</div></div><div class="footer">${profile?.phone ? `تماس استودیو: ${esc(profile.phone)}` : ''}</div></div>
+<div class="page"><div class="brand"><h1>فاکتور خدمات</h1><div>${esc(project.name)} | ${esc(project.groomName)} و ${esc(project.brideName)}</div><span class="muted">تاریخ صدور: ${formatDate()}</span></div><table><thead><tr><th>خدمت یا تجهیزات</th><th class="num">تعداد</th><th class="num">فی، تومن</th><th class="num">جمع، تومن</th></tr></thead><tbody>${rowHtml}<tr class="total"><td colspan="3">جمع کل</td><td>${fa(total)}</td></tr><tr><td colspan="3">بیعانه / پرداختی</td><td>${fa(deposit)}</td></tr><tr class="total"><td colspan="3">مانده قابل پرداخت</td><td>${fa(remaining)}</td></tr></tbody></table><div class="footer">این فاکتور براساس خدمات انتخاب‌شده در پروژه تولید شده است.${profile?.phone ? `<br>تماس: ${esc(profile.phone)}` : ''}</div></div>
+</body></html>`;
 }
 
-function baseStyles() {
-  return `@page{size:A4;margin:13mm}*{box-sizing:border-box}body{margin:0;color:#201b24;background:#fff;font-family:Tahoma,'Segoe UI',sans-serif;direction:rtl;font-size:11px;line-height:1.8}.page{min-height:268mm;position:relative;padding-bottom:24mm}.page+.page{page-break-before:always}.brand{display:flex;align-items:center;justify-content:space-between;padding-bottom:10px;border-bottom:2px solid #201b24}.brand-main{display:flex;align-items:center;gap:10px}.logo{width:44px;height:44px;object-fit:contain;border-radius:8px}.brand h1{margin:0;font-size:17px}.brand p,.doc-meta p{margin:0;color:#675e6b}.doc-meta{text-align:left}.title{text-align:center;margin:20px 0 14px}.title h2{margin:0;font-size:20px}.title p{margin:2px 0;color:#675e6b}.lead{padding:12px 14px;background:#f4f0ea;border-radius:10px}.facts{display:grid;grid-template-columns:1fr 1fr;gap:7px 18px;margin:14px 0}.fact{display:flex;gap:5px;padding-bottom:5px;border-bottom:1px solid #ded8df}.fact span{color:#675e6b}.fact b{font-weight:700}.section{margin-top:15px}.section h3{margin:0 0 7px;font-size:13px}.terms{margin:0;padding-right:20px}.terms li{margin-bottom:4px}table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}th,td{padding:7px 5px;border:1px solid #d7d0d9;text-align:center}th{background:#2c2630;color:#fff;font-size:10px}.desc{text-align:right;min-width:170px}.totals{width:48%;margin:10px 0 0 auto}.totals p{display:flex;justify-content:space-between;margin:0;padding:4px 8px;border-bottom:1px solid #ded8df}.totals .grand{background:#f4f0ea;font-size:12px}.notes{min-height:56px;padding:9px;border:1px solid #d7d0d9;border-radius:8px;white-space:pre-wrap}.signatures{position:absolute;bottom:0;left:0;right:0;display:grid;grid-template-columns:repeat(3,1fr);gap:20px;text-align:center}.signature{padding-top:8px;border-top:1px solid #918994;min-height:45px}.footer{margin-top:15px;padding-top:8px;border-top:1px solid #ded8df;text-align:center;color:#675e6b;font-size:9px}.payment{display:flex;gap:8px}.payment span{flex:1;padding:7px;text-align:center;border:1px solid #d7d0d9;border-radius:7px}.payment .on{background:#2c2630;color:#fff}@media print{button{display:none!important}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`;
+export function printContract(project: OfficeProject, profile: StudioProfile | null): void {
+  const html = generateContractHTML(project, profile);
+  const popup = window.open('', '_blank', 'noopener,noreferrer,width=920,height=720');
+  if (!popup) { const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' })); const a = document.createElement('a'); a.href = url; a.download = `قرارداد-${project.name || 'پروژه'}.html`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); return; }
+  popup.document.open(); popup.document.write(html); popup.document.close();
+  setTimeout(() => { try { popup.focus(); popup.print(); } catch { /* popup was closed */ } }, 700);
 }
 
-function header(profile: StudioProfile | null, title: string, project: OfficeProject) {
-  return `<header class="brand"><div class="brand-main">${profile?.logo ? `<img class="logo" src="${profile.logo}" alt="لوگو">` : ''}<div><h1>${esc(profile?.name || 'استودیو عکاسی و فیلم‌برداری')}</h1><p>${esc(profile?.address || '')}</p></div></div><div class="doc-meta"><p>${title}</p><p>${esc(project.name)}</p></div></header>`;
+
+export function generateInvoiceHTML(project: OfficeProject, profile: StudioProfile | null): string {
+  const items = [...(project.ceremonyInvoice?.items || []), ...(project.formalityInvoice?.items || [])];
+  const total = items.reduce((sum, item) => sum + item.count * item.price, 0);
+  const deposit = (project.ceremonyInvoice?.deposit || 0) + (project.formalityInvoice?.deposit || 0);
+  const remaining = Math.max(0, total - deposit);
+  const rows = items.length ? items.map(item => `<tr><td>${esc(item.name)}</td><td>${fa(item.count)}</td><td>${fa(item.price)}</td><td>${fa(item.count * item.price)}</td></tr>`).join('') : '<tr><td colspan="4">موردی ثبت نشده</td></tr>';
+  return `<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><title>فاکتور ${esc(project.name)}</title><style>
+*{box-sizing:border-box}body{margin:0;background:#f5f1e9;color:#28251f;font-family:Tahoma,Arial,sans-serif;line-height:1.8}.sheet{width:210mm;min-height:148mm;margin:0 auto;padding:16mm;background:#fffdf8}.brand{text-align:center;border-bottom:3px solid #66784c;padding-bottom:12px;margin-bottom:24px}.brand h1{margin:0;color:#52633e;font-size:22px}table{width:100%;border-collapse:collapse;font-size:13px}th{background:#e8ecd9;color:#52633e}th,td{padding:10px;border:1px solid #d7ddcc;text-align:right}.total{background:#f5ead7;font-weight:bold}.meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}.box{padding:10px;border:1px solid #d8dfca;border-radius:8px;background:#f8faf1}.footer{text-align:center;color:#777;font-size:10px;margin-top:26px}@page{size:A4;margin:0}@media print{body{background:#fff}.sheet{margin:0}}
+</style></head><body><main class="sheet"><div class="brand"><h1>${esc(profile?.name || 'استودیو عکس و فیلم')}</h1><div>فاکتور خدمات عکاسی و فیلمبرداری</div><small>${esc(project.name)} | ${esc(project.groomName)} و ${esc(project.brideName)} | ${formatDate()}</small></div><div class="meta"><div class="box"><strong>مشتری:</strong> ${esc(project.groomName)} و ${esc(project.brideName)}</div><div class="box"><strong>تماس:</strong> ${esc(project.clientPhone)}</div></div><table><thead><tr><th>شرح خدمت یا مورد سفارشی</th><th>تعداد</th><th>قیمت واحد، تومن</th><th>جمع، تومن</th></tr></thead><tbody>${rows}<tr class="total"><td colspan="3">جمع کل</td><td>${fa(total)}</td></tr><tr><td colspan="3">بیعانه / پرداختی</td><td>${fa(deposit)}</td></tr><tr class="total"><td colspan="3">مانده قابل پرداخت</td><td>${fa(remaining)}</td></tr></tbody></table><div class="footer">این فاکتور براساس خدمات و تجهیزات انتخاب‌شده در پروژه تولید شده است.${profile?.phone ? `<br>تماس استودیو: ${esc(profile.phone)}` : ''}</div></main></body></html>`;
 }
 
-export function generateContractHTML(project: OfficeProject, profile: StudioProfile | null, mode: 'contract' | 'invoice' | 'both' = 'both'): string {
-  const c = project.customer || {};
-  const ceremony = project.ceremony;
-  const contractPage = `<section class="page">${header(profile, 'قرارداد خدمات', project)}<div class="title"><h2>قرارداد خدمات عکاسی و فیلم‌برداری</h2><p>این قرارداد بر اساس خدمات تأییدشده در فاکتور تنظیم شده است.</p></div><p class="lead">این قرارداد میان <b>${esc(profile?.name || 'استودیو')}</b> و آقای <b>${esc(c.groomName || '................')}</b> با کد ملی ${esc(c.groomNationalId || '................')} و خانم <b>${esc(c.brideName || '................')}</b> با کد ملی ${esc(c.brideNationalId || '................')} برای ارائه خدمات ${esc(project.eventType || 'مراسم')} منعقد می‌شود.</p><div class="facts"><p class="fact"><span>تاریخ مراسم:</span><b>${formatDate(ceremony?.date)}</b></p><p class="fact"><span>محل:</span><b>${esc(ceremony?.location || '................')}</b></p><p class="fact"><span>ساعت اجرا:</span><b>${esc(project.startTime || '....')} تا ${esc(project.endTime || '....')}</b></p><p class="fact"><span>تماس زوج:</span><b>${esc([c.bridePhone, c.groomPhone].filter(Boolean).join('، ') || '................')}</b></p><p class="fact" style="grid-column:1/-1"><span>نشانی:</span><b>${esc(c.address || '................')}</b></p></div><div class="section"><h3>موضوع و مبلغ قرارداد</h3>${invoiceTable(project)}</div><div class="section"><h3>شرایط قرارداد</h3><ol class="terms">${TERMS.map((term) => `<li>${term}</li>`).join('')}</ol></div><div class="section"><h3>توضیحات و توافق‌های ویژه</h3><div class="notes">${esc(project.contractNotes || 'موردی ثبت نشده است.')}</div></div><div class="section"><h3>شرایط پرداخت</h3><div class="payment">${(['نقد', 'سه ماهه', 'پنج ماهه'] as const).map((p) => `<span class="${project.paymentPlan === p ? 'on' : ''}">${p}</span>`).join('')}</div>${project.overtimeRate ? `<p>هر ساعت اضافه: <b>${fa(project.overtimeRate)} تومان</b></p>` : ''}</div><div class="signatures"><div class="signature">امضای داماد</div><div class="signature">امضای عروس</div><div class="signature">مهر و امضای استودیو</div></div></section>`;
-  const invoicePage = `<section class="page">${header(profile, 'پیش‌فاکتور خدمات', project)}<div class="title"><h2>پیش‌فاکتور</h2><p>${formatDate(ceremony?.date)}، ${esc([c.brideName, c.groomName].filter(Boolean).join(' و ') || project.name)}</p></div>${invoiceTable(project)}<div class="section"><h3>توضیحات</h3><div class="notes">این فاکتور پیش از نهایی‌شدن قابل ویرایش است. خدمات نهایی قرارداد دقیقاً از ردیف‌های همین فاکتور گرفته می‌شود.</div></div><div class="footer">${esc(profile?.name)} ${profile?.phone ? ` | ${esc(profile.phone)}` : ''} ${profile?.craftCode ? ` | شماره صنفی: ${esc(profile.craftCode)}` : ''}</div></section>`;
-  const body = mode === 'contract' ? contractPage : mode === 'invoice' ? invoicePage : contractPage + invoicePage;
-  return `<!doctype html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${mode === 'invoice' ? 'پیش‌فاکتور' : 'قرارداد'} ${esc(project.name)}</title><style>${baseStyles()}</style></head><body>${body}<script>window.addEventListener('load',()=>setTimeout(()=>window.print(),250));</script></body></html>`;
+function openPrintable(html: string, fileName: string): void {
+  const downloadFallback = () => {
+    try {
+      const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName.replace(/\.pdf$/i, '.html');
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch { /* the host may block downloads, never take down the app */ }
+  };
+  try {
+    const popup = window.open('', '_blank', 'noopener,noreferrer,width=920,height=720');
+    if (!popup || popup.closed) { downloadFallback(); return; }
+    popup.document.open();
+    popup.document.write(html);
+    popup.document.close();
+    setTimeout(() => { try { if (!popup.closed) { popup.focus(); popup.print(); } } catch { downloadFallback(); } }, 700);
+  } catch { downloadFallback(); }
 }
 
-export function openPrintableDocument(project: OfficeProject, profile: StudioProfile | null, mode: 'contract' | 'invoice' | 'both') {
-  const html = generateContractHTML(project, profile, mode);
-  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const win = window.open(url, '_blank');
-  if (!win) {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${mode === 'invoice' ? 'فاکتور' : 'قرارداد'}-${project.name}.html`;
-    link.click();
+export function printInvoice(project: OfficeProject, profile: StudioProfile | null): void {
+  openPrintable(generateInvoiceHTML(project, profile), `فاکتور-${project.name || 'پروژه'}.pdf`);
+}
+
+export async function shareInvoice(project: OfficeProject, profile: StudioProfile | null): Promise<boolean> {
+  const html = generateInvoiceHTML(project, profile);
+  const file = new File([html], `فاکتور-${project.name || 'پروژه'}.html`, { type: 'text/html' });
+  if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+    await navigator.share({ title: `فاکتور ${project.name}`, text: 'فاکتور خدمات', files: [file] });
+    return true;
   }
-  window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+  return false;
+}
+
+
+export async function shareContract(project: OfficeProject, profile: StudioProfile | null): Promise<boolean> {
+  const html = generateContractHTML(project, profile);
+  const file = new File([html], `قرارداد-${project.name || 'پروژه'}.html`, { type: 'text/html' });
+  if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+    await navigator.share({ title: `قرارداد ${project.name}`, text: 'قرارداد خدمات عکاسی و فیلمبرداری', files: [file] });
+    return true;
+  }
+  return false;
 }

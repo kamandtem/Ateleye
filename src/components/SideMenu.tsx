@@ -114,15 +114,15 @@ export const SideMenu: React.FC<Props> = ({
         aria-hidden
       />
 
-      {/* پنل شناور سمت راست */}
+      {/* پنل برندشده، الهام‌گرفته از منوی مرجع کاربر */}
       <aside
-        className="fixed z-[71] a-slide-right card overflow-y-auto no-scrollbar shadow-2xl"
+        className="atelito-menu fixed z-[71] a-slide-right overflow-y-auto no-scrollbar"
         style={{
-          top: 'calc(10px + env(safe-area-inset-top, 0px))',
-          bottom: 'calc(10px + env(safe-area-inset-bottom, 0px))',
-          right: '12px',
-          width: 'min(78vw, 296px)',
-          borderRadius: '22px',
+          top: 'calc(8px + env(safe-area-inset-top, 0px))',
+          bottom: 'calc(8px + env(safe-area-inset-bottom, 0px))',
+          right: '8px',
+          width: 'min(88vw, 344px)',
+          borderRadius: '32px',
         }}
         role="dialog"
         aria-label="منوی برنامه"
@@ -135,17 +135,22 @@ export const SideMenu: React.FC<Props> = ({
         }}
       >
         {/* Profile Section */}
-        <div className="sticky top-0 z-10 px-4 py-4 space-y-3 border-b border-line bg-surface">
-          <div className="space-y-2">
+        <div className="sticky top-0 z-10 px-5 pt-5 pb-4">
+          <div className="menu-profile-tools">
+            <button onClick={() => go('settings')} className="menu-round-button" title="تنظیمات"><Settings className="w-5 h-5" /></button>
+            <button onClick={onToggleTheme} className="menu-round-button" title="تغییر تم">{theme === 'dark' ? <Sun className="w-5 h-5 text-gold" /> : <Moon className="w-5 h-5 text-gold" />}</button><button onClick={onClose} className="menu-round-button menu-close" aria-label="بستن منو"><X className="w-5 h-5" /></button>
+          </div>
+          <div className="menu-profile-row">
             <label
               htmlFor="profile-image-input"
-              className="block w-20 h-20 rounded-full overflow-hidden flex items-center justify-center bg-surface2 border-2 border-gold cursor-pointer hover:opacity-80 transition-opacity mx-auto"
+              className="block w-16 h-16 shrink-0 rounded-full overflow-hidden flex items-center justify-center cursor-pointer transition-opacity"
+              style={{ background: 'rgba(255,255,255,.12)', border: '2px solid rgba(255,255,255,.82)' }}
               title="لمس برای تغییر تصویر"
             >
               {profile?.logo ? (
                 <img src={profile.logo} alt="تصویر پروفایل" className="w-full h-full object-cover" />
               ) : (
-                <UserRound className="w-8 h-8 text-gold" />
+                <UserRound className="w-7 h-7 text-white" />
               )}
             </label>
             <input
@@ -156,40 +161,17 @@ export const SideMenu: React.FC<Props> = ({
               style={{ display: 'none' }}
               aria-label="انتخاب عکس پروفایل"
             />
-            <p className="text-[10px] text-muted text-center">لمس برای تغییر</p>
+            <div className="min-w-0 flex-1 text-right">
+              <span className="text-[10px] text-white/60">سلام، خوش آمدی</span>
+              <b className="block truncate text-[15px] text-white">{profile?.name || 'آتلیتو'}</b>
+              <button onClick={onOpenStudioProfile} className="mt-2 rounded-full border border-white/30 px-3 py-1 text-[10px] font-extrabold text-white">ویرایش پروفایل</button>
+            </div>
           </div>
-          <div className="text-center">
-            <span className="text-[10px] text-muted">خوش آمدی</span>
-            <b className="block text-[14px]">{profile?.name || 'کاربر'}</b>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onOpenStudioProfile}
-              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-line text-[11px] font-bold"
-              title="ویرایش پروفایل"
-            >
-              <UserRound className="w-4 h-4" />
-              پروفایل
-            </button>
-            <button
-              onClick={() => onNavigate('settings')}
-              className="w-10 h-10 rounded-xl border border-line flex items-center justify-center"
-              title="تنظیمات"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
-            <button
-              onClick={onToggleTheme}
-              className="w-10 h-10 rounded-xl border border-line flex items-center justify-center"
-              title="تغییر تم"
-            >
-              {theme === 'dark' ? <Sun className="w-4 h-4 text-gold" /> : <Moon className="w-4 h-4 text-gold" />}
-            </button>
-          </div>
+
         </div>
 
         {/* Navigation Menu */}
-        <nav className="p-2.5 space-y-1">
+        <nav className="mx-4 border-t border-white/16 py-3">
           {items.map((it, idx) => {
             const active = it.tab && activeTab === it.tab;
             const Icon = it.icon;
@@ -200,42 +182,42 @@ export const SideMenu: React.FC<Props> = ({
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl transition-colors text-right"
                 style={{
                   background: active
-                    ? 'color-mix(in srgb, var(--color-gold) 16%, transparent)'
+                    ? 'rgba(255,255,255,.15)'
                     : 'transparent',
                   border: active
-                    ? '1px solid color-mix(in srgb, var(--color-gold) 45%, transparent)'
+                    ? '1px solid rgba(255,255,255,.24)'
                     : '1px solid transparent',
                 }}
               >
                 <Icon
                   className="w-4 h-4 shrink-0"
-                  style={{ color: it.accent || active ? 'var(--color-gold)' : 'var(--color-muted)' }}
+                  style={{ color: active ? '#ffb37d' : 'rgba(255,255,255,.76)' }}
                 />
                 <span
                   className="flex-1 text-[13px] font-semibold"
-                  style={{ color: active ? 'var(--color-ink)' : 'var(--color-ink)' }}
+                  style={{ color: '#fff' }}
                 >
                   {it.label}
                 </span>
                 {typeof it.badge === 'number' && it.badge > 0 && (
                   <span className="pill text-[10px] px-2 py-0.5">{it.badge}</span>
                 )}
-                <ChevronLeft className="w-3.5 h-3.5 text-faint" />
+                <ChevronLeft className="w-3.5 h-3.5 text-white/45" />
               </button>
             );
           })}
         </nav>
 
         {/* Developer Contact Section */}
-        <div className="px-3 pb-4 pt-4 space-y-3 border-t border-line">
+        <div className="mx-4 px-1 pb-5 pt-4 space-y-3 border-t border-white/16">
           <div className="space-y-2">
-            <p className="text-[10px] text-muted text-center font-bold">برنامه‌نویس</p>
-            <p className="text-[13px] font-bold text-center">محمدرضا ارجمند</p>
+            <p className="text-[10px] text-white/55 text-center font-bold">طراحی و توسعه</p>
+            <p className="text-[13px] font-bold text-white text-center">محمدرضا ارجمند</p>
           </div>
           <div className="flex items-center gap-2 justify-center">
             <a
               href="tel:+989164573083"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-line text-[11px] font-bold hover:bg-surface2 transition-colors"
+              className="menu-utility"
               title="تماس"
             >
               <Phone className="w-4 h-4" />
@@ -243,14 +225,14 @@ export const SideMenu: React.FC<Props> = ({
             </a>
             <a
               href="sms:+989164573083"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-line text-[11px] font-bold hover:bg-surface2 transition-colors"
+              className="menu-utility"
               title="پیامک"
             >
               <MessageSquare className="w-4 h-4" />
               پیامک
             </a>
           </div>
-          <p className="text-[10px] text-muted text-center">09164573083</p>
+          <p className="text-[10px] text-white/50 text-center">09164573083</p>
         </div>
       </aside>
     </>

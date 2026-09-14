@@ -12,29 +12,44 @@ import {
 import { LocationType, Pose } from '../types/pose';
 import { LOCATIONS } from '../data/locations';
 import { SectionGuide } from '../components/SectionGuide';
+import { splitByScope } from '../data/taxonomy';
 
 interface Props {
   poses: Pose[];
   onPickLocation: (l: LocationType) => void;
+  /** ورود به کتابخانه با فیلتر «اختصاصی همین لوکیشن» */
+  onPickLocationSpecial?: (l: LocationType) => void;
 }
 
-/** بخش لوکیشن‌ها: جنوب، شمال، کویر، باغ عمارت */
-export const LocationsView: React.FC<Props> = ({ poses, onPickLocation }) => {
+/**
+ * لوکیشن‌ها = Context، نه دسته‌بندی.
+ * هر لوکیشن دو چیز به کاربر می‌دهد:
+ *   ۱) راهنمای اجرایی محیط (نور، لباس، لنز، زمان، خطاها)
+ *   ۲) دو سبد ژست: «عمومی قابل اجرا این‌جا» + «اختصاصی همین محیط»
+ * هیچ ژستی این‌جا کپی نمی‌شود؛ همان رکورد با metadata سازگاری دیده می‌شود.
+ */
+export const LocationsView: React.FC<Props> = ({ poses, onPickLocation, onPickLocationSpecial }) => {
   const [open, setOpen] = useState<LocationType | null>(null);
 
   return (
     <div className="space-y-4">
-      <SectionGuide section="locations" title="لوکیشن‌ها چه کمکی می‌کنند؟" text="برای جنوب، شمال، کویر و باغ عمارت، راهنمای نور، لباس، لنز، زمان مناسب و ایده‌های سریع داری." />
+      <SectionGuide
+        section="locations-context-v2"
+        title="لوکیشن یک Context است، نه دسته‌بندی"
+        text="هسته ژست‌ها عمومی است و در همه محیط‌ها اجرا می‌شود. این بخش فقط می‌گوید در این محیط نور و لباس و لنز چه رفتاری دارد و چه ژست‌هایی مخصوص خودِ همین محیط‌اند."
+      />
       <div className="card p-4">
-        <h2 className="font-extrabold text-[15px]">لوکیشن‌ها</h2>
+        <h2 className="font-extrabold text-[15px]">Location Context</h2>
         <p className="text-[11px] text-muted mt-1 leading-relaxed">
-          برای هر لوکیشن: بهترین ساعت عکاسی، رفتار نور، استایل لباس، تجهیزات و اشتباه‌هایی که آن
-          محل به شما تحمیل می‌کند.
+          هر کارت دو عدد دارد: <span className="font-bold" style={{ color: 'var(--color-teal)' }}>ژست عمومی قابل اجرا</span> در این
+          محیط، و <span className="font-bold text-gold">ژست اختصاصی</span> که بدون ویژگی فیزیکی همین
+          محیط بی‌معنا می‌شود. یک ژست هرگز دو نسخه ندارد؛ فقط در چند Context دیده می‌شود.
         </p>
       </div>
 
       {LOCATIONS.map((l) => {
-        const count = poses.filter((p) => p.locations.includes(l.key)).length;
+        const split = splitByScope(poses, l.key);
+        const count = split.general.length + split.special.length;
         const expanded = open === l.key;
 
         return (
@@ -73,9 +88,17 @@ export const LocationsView: React.FC<Props> = ({ poses, onPickLocation }) => {
                   <div className="flex items-center gap-2 shrink-0">
                     <span
                       className="text-[10px] font-bold px-2 py-1 rounded-full"
-                      style={{ background: 'rgba(8,6,14,.5)', color: '#FFF8EC' }}
+                      style={{ background: 'rgba(8,6,14,.5)', color: 'var(--color-teal)' }}
+                      title="ژست عمومی قابل اجرا در این محیط"
                     >
-                      {count} ژست
+                      {split.general.length} عمومی
+                    </span>
+                    <span
+                      className="text-[10px] font-bold px-2 py-1 rounded-full"
+                      style={{ background: 'rgba(8,6,14,.5)', color: '#F0B357' }}
+                      title="ژست اختصاصی همین محیط"
+                    >
+                      {split.special.length} اختصاصی
                     </span>
                     <ChevronDown
                       className="w-4 h-4"
@@ -121,13 +144,26 @@ export const LocationsView: React.FC<Props> = ({ poses, onPickLocation }) => {
                   </ul>
                 </div>
 
-                <button
-                  onClick={() => onPickLocation(l.key)}
-                  className="btn btn-primary w-full"
-                >
-                  دیدن {count} ژست این لوکیشن
-                  <ArrowLeft className="w-4 h-4" />
-                </button>
+                <div className="space-y-2">
+                  <button onClick={() => onPickLocation(l.key)} className="btn btn-primary w-full">
+                    همه {count} ژست قابل اجرا این‌جا
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
+                  {split.special.length > 0 && onPickLocationSpecial && (
+                    <button
+                      onClick={() => onPickLocationSpecial(l.key)}
+                      className="btn btn-ghost w-full"
+                      style={{ borderColor: 'color-mix(in srgb, var(--color-gold) 45%, transparent)' }}
+                    >
+                      فقط {split.special.length} ژست اختصاصی {l.key}
+                      <ArrowLeft className="w-4 h-4 text-gold" />
+                    </button>
+                  )}
+                  <p className="text-[10.5px] text-faint leading-relaxed">
+                    {split.general.length} ژست عمومی هم این‌جا اجرا می‌شود؛ آن‌ها متعلق به این لوکیشن
+                    نیستند، فقط با آن سازگارند.
+                  </p>
+                </div>
               </div>
             )}
           </div>
