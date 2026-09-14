@@ -59,6 +59,7 @@ date: string;
 poseIds: string[];
 completedPoseIds?: string[];
 createdAt: number;
+mode?: 'عکاسی' | 'فیلم‌برداری';
 }
 
 export type FilmNote = {
