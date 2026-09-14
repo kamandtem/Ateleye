@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2732 2732" width="2732" height="2732">
+<defs>
+    <linearGradient id="pdGold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFDCA6"/>
+      <stop offset=".5" stop-color="#F0B357"/>
+      <stop offset="1" stop-color="#E08A4E"/>
+    </linearGradient>
+    <linearGradient id="pdRose" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFC9C0"/>
+      <stop offset="1" stop-color="#E4715B"/>
+    </linearGradient>
+  
+<linearGradient id="sbg" x1="0" y1="0" x2=".7" y2="1"><stop offset="0" stop-color="#191325"/><stop offset=".55" stop-color="#0B0A12"/><stop offset="1" stop-color="#140F1C"/></linearGradient>
+<radialGradient id="sglow" cx=".5" cy=".45" r=".40"><stop offset="0" stop-color="#F0B357" stop-opacity=".20"/><stop offset="1" stop-color="#F0B357" stop-opacity="0"/></radialGradient>
+</defs>
+<rect width="2732" height="2732" fill="url(#sbg)"/><rect width="2732" height="2732" fill="url(#sglow)"/>
+<g transform="translate(1366,1250) scale(1.65) translate(-256,-256)">
+
+  <!-- viewfinder frame -->
+  <g fill="none" stroke="url(#pdGold)" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" opacity=".9">
+    <path d="M104 182V132a28 28 0 0 1 28-28h50"/>
+    <path d="M408 182V132a28 28 0 0 0-28-28h-50"/>
+    <path d="M104 330v50a28 28 0 0 0 28 28h50"/>
+    <path d="M408 330v50a28 28 0 0 1-28 28h-50"/>
+  </g>
+  <circle cx="256" cy="122" r="10" fill="#FFE9C7"/>
+
+  <!-- groom -->
+  <circle cx="210" cy="188" r="25" fill="url(#pdGold)"/>
+  <g fill="none" stroke="url(#pdGold)" stroke-width="21" stroke-linecap="round">
+    <path d="M210 216v84"/>
+    <path d="M210 300l-16 72"/>
+    <path d="M210 300l17 72"/>
+    <path d="M210 240l50 20"/>
+  </g>
+
+  <!-- bride -->
+  <circle cx="306" cy="200" r="22" fill="url(#pdRose)"/>
+  <g fill="none" stroke="url(#pdRose)" stroke-width="20" stroke-linecap="round">
+    <path d="M306 226v56"/>
+    <path d="M306 250l-48 12"/>
+  </g>
+  <path d="M306 274l-40 96q40 14 80 0z" fill="url(#pdRose)"/>
+</g>
+<rect x="1216" y="1690" width="300" height="6" rx="3" fill="#F0B357" opacity=".55"/>
+<text x="1366" y="1830" text-anchor="middle" font-family="Vazirmatn, DejaVu Sans, sans-serif" font-size="104" font-weight="700" fill="#F5EFE6">کارگردان ژست</text>
+<text x="1366" y="1945" text-anchor="middle" font-family="Vazirmatn, DejaVu Sans, sans-serif" font-size="46" font-weight="500" fill="#B9AFC2">برنامه‌نویس: محمدرضا ارجمند</text>
+</svg>
